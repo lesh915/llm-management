@@ -118,6 +118,45 @@ services:
       redis:
         condition: service_healthy
 
+  # Celery worker — comparison task execution
+  celery-worker:
+    build:
+      context: ./services/comparison-engine
+    command: >
+      celery -A comparison_engine.worker worker
+        --loglevel=info
+        --concurrency=4
+        --queues=celery
+    environment:
+      DATABASE_URL: postgresql+asyncpg://llm_mgmt:password@postgres:5432/llm_mgmt
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: llm-management
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      MODEL_REGISTRY_URL: http://model-registry-service:8000
+      OLLAMA_BASE_URL: http://ollama:11434
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Flower — task monitoring UI (optional)
+  flower:
+    build:
+      context: ./services/comparison-engine
+    command: >
+      celery -A comparison_engine.worker flower
+        --port=5555
+        --broker=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on: [redis, celery-worker]
+
 volumes:
   postgres_data:
   minio_data:
