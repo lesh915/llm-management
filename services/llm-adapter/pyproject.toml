@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "llm-adapter"
+version = "1.0.0"
+description = "Unified LLM adapter layer — cloud + local models"
+authors = ["Seungha Lee <lesh915@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+anthropic = "^0.50"
+openai = "^1.50"
+httpx = "^0.27"
+cryptography = "^43.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

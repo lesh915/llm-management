@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "shared-types"
+version = "1.0.0"
+description = "Shared SQLAlchemy models and Pydantic schemas"
+authors = ["Seungha Lee <lesh915@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+sqlalchemy = {extras = ["asyncio"], version = "^2.0"}
+pydantic = "^2.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

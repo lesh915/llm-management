@@ -1,0 +1,239 @@
+# LLM Management System
+
+> **LLM-Aware** 에이전트 관리 시스템 — 모델 레지스트리, 다모델 비교 분석, AIOps 자동 대응
+
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## 개요
+
+AI 에이전트 개발에서 LLM 모델을 교체할 때마다 프롬프트·MCP 설정·Skills이 의도대로 동작하지 않는 문제를 해결하기 위한 **LLM-aware(모델 인지형)** 관리 플랫폼입니다.
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    Web UI / CLI                       │
+└─────────────────────┬────────────────────────────────┘
+                      │ REST API / WebSocket
+┌─────────────────────▼────────────────────────────────┐
+│                  API Gateway                          │
+└──┬──────────┬──────────┬──────────────┬──────────────┘
+   │          │          │              │
+┌──▼──┐  ┌───▼───┐  ┌───▼────┐  ┌──────▼──────┐
+│  A  │  │   B   │  │   C    │  │     D        │
+│Agent│  │Model  │  │Compare │  │  AIOps       │
+│Mgmt │  │Reg.   │  │Engine  │  │  + AI Agent  │
+└─────┘  └───────┘  └────────┘  └─────────────┘
+              LLM Adapter Layer
+   Anthropic │ OpenAI │ Ollama │ vLLM │ LM Studio
+```
+
+---
+
+## 주요 기능
+
+| 모듈 | 기능 |
+|------|------|
+| **A. 에이전트 관리** | 아티팩트(프롬프트·MCP·Skills) 등록·버전 관리, 모델 의존성 자동 분석, 전환 영향 분석 |
+| **B. 모델 레지스트리** | 클라우드·로컬 모델 등록, 특성 비교 매트릭스, 생명주기 관리, Ollama 자동 탐색 |
+| **C. 비교 분석 엔진** | 병렬 다모델 평가, 7가지 지표 계산, 권장 모델 제안, A/B 비교, 실시간 WebSocket 진행 상태 |
+| **D. AIOps** | 운영 지표 수집, 이상 탐지, AI 에이전트 자동 진단·조치, 승인 플로우, 규칙 엔진 |
+
+---
+
+## 지원 LLM
+
+| 유형 | 공급자 |
+|------|--------|
+| **클라우드** | Anthropic (Claude), OpenAI (GPT), Google (Gemini) |
+| **로컬** | Ollama, vLLM, LM Studio, LocalAI |
+| **커스텀** | OpenAI-compatible API를 노출하는 모든 서버 |
+
+---
+
+## 빠른 시작
+
+### 사전 요구사항
+- Docker & Docker Compose
+- Python 3.12+
+- (선택) Ollama — 로컬 LLM 비교 시
+
+### 1. 저장소 클론
+
+```bash
+git clone https://github.com/lesh915/llm-management.git
+cd llm-management
+```
+
+### 2. 환경 변수 설정
+
+```bash
+cp .env.example .env
+# .env 파일에서 API 키 입력 (Anthropic, OpenAI 등 사용하는 공급자만)
+```
+
+### 3. 전체 스택 실행
+
+```bash
+docker compose up -d
+```
+
+서비스 포트:
+
+| 서비스 | URL |
+|--------|-----|
+| artifact-service | http://localhost:8001/docs |
+| model-registry-service | http://localhost:8002/docs |
+| comparison-engine | http://localhost:8003/docs |
+| Ollama | http://localhost:11434 |
+| MinIO Console | http://localhost:9001 |
+| Celery Flower | http://localhost:5555 |
+
+### 4. (선택) 로컬 Ollama 모델 자동 등록
+
+```bash
+# Ollama가 실행 중인 경우 — 설치된 모델을 레지스트리에 자동 등록
+curl -X POST http://localhost:8002/models/import/ollama \
+  -H "Content-Type: application/json" \
+  -d '{"base_url": "http://localhost:11434"}'
+```
+
+---
+
+## 사용 예시
+
+### 클라우드 + 로컬 모델 비교
+
+```bash
+# 1. 클라우드 모델 등록
+curl -X POST http://localhost:8002/models \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "claude-sonnet-4-6",
+    "provider": "Anthropic",
+    "family": "Claude 4",
+    "version": "4.6",
+    "capabilities": {
+      "context_window": 200000, "max_output_tokens": 8192,
+      "vision": true, "tool_use": true, "structured_output": true,
+      "streaming": true, "parallel_tool_calls": true, "extended_thinking": false
+    },
+    "characteristics": {
+      "reasoning_depth": "high", "instruction_following": "high",
+      "code_generation": "high", "latency_tier": "medium"
+    },
+    "pricing": {"input_per_1m_tokens": 3.0, "output_per_1m_tokens": 15.0},
+    "api": {"endpoint": "https://api.anthropic.com/v1", "auth_type": "api_key"}
+  }'
+
+# 2. 비교 태스크 생성 (클라우드 + 로컬 혼합)
+curl -X POST http://localhost:8003/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Cloud vs Local Benchmark",
+    "models": ["claude-sonnet-4-6", "ollama/llama3.2:3b"],
+    "dataset_id": "my-eval-set",
+    "metrics": ["correctness", "tool_call_accuracy", "latency_p95", "cost_per_query"]
+  }'
+
+# 3. 태스크 실행
+curl -X POST http://localhost:8003/tasks/{task_id}/run
+
+# 4. 결과 리포트 조회
+curl http://localhost:8003/tasks/{task_id}/report
+
+# 5. 권장 모델 조회 (비용 우선)
+curl "http://localhost:8003/tasks/{task_id}/recommendation?priority=cost"
+```
+
+### 모델 전환 영향 분석
+
+```bash
+# 아티팩트 등록
+curl -X POST http://localhost:8001/agents/{agent_id}/artifacts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "mcp",
+    "content": {"tool_choice": "required", "tools": [...]}
+  }'
+
+# 영향 분석 (claude-sonnet → ollama/llama3.2:3b 전환 시)
+curl "http://localhost:8001/artifacts/{artifact_id}/impact\
+?source_model_id=claude-sonnet-4-6&target_model_id=ollama/llama3.2:3b"
+```
+
+---
+
+## 프로젝트 구조
+
+```
+llm-management/
+├── services/
+│   ├── artifact-service/          # 모듈 A — 에이전트 아티팩트 관리
+│   ├── model-registry-service/    # 모듈 B — LLM 모델 레지스트리
+│   ├── comparison-engine/         # 모듈 C — 다모델 비교 분석
+│   ├── aiops-service/             # 모듈 D — AIOps 모니터링 (Phase 3)
+│   ├── ai-agent-runner/           # 모듈 D — AI 진단 에이전트 (Phase 3)
+│   ├── llm-adapter/               # 공통 — LLM 어댑터 레이어
+│   └── api-gateway/               # 공통 — API 게이트웨이 (예정)
+├── packages/
+│   └── shared-types/              # 공유 ORM 모델 + Pydantic 스키마
+├── infra/
+│   ├── migrations/                # Alembic DB 마이그레이션
+│   └── k8s/                       # Kubernetes 매니페스트 (예정)
+├── docker-compose.yml
+├── .env.example
+├── LLM-PRD.md                     # 제품 요구사항 문서
+└── DEVELOPMENT_GUIDE.md           # 개발 가이드 (v1.1.0)
+```
+
+---
+
+## 개발 로드맵
+
+| Phase | 내용 | 상태 |
+|-------|------|------|
+| **Phase 1** | 에이전트 아티팩트 관리 (모듈 A) + 모델 레지스트리 (모듈 B) + LLM 어댑터 레이어 | ✅ 완료 |
+| **Phase 2** | 다모델 비교 분석 엔진 (모듈 C) + Celery 병렬 실행 + WebSocket | ✅ 완료 |
+| **Phase 3** | AIOps 모니터링 + AI 에이전트 자동 진단·조치 (모듈 D) | 🚧 진행 중 |
+
+---
+
+## API 문서
+
+각 서비스는 FastAPI 자동 생성 Swagger UI를 제공합니다.
+
+- Artifact Service: http://localhost:8001/docs
+- Model Registry: http://localhost:8002/docs
+- Comparison Engine: http://localhost:8003/docs
+
+---
+
+## 테스트 실행
+
+```bash
+# 의존성 분석기 단위 테스트
+pytest services/artifact-service/tests/ -v
+
+# Ollama 메타 추론 단위 테스트
+pytest services/model-registry-service/tests/ -v
+
+# 비교 엔진 단위 테스트 (지표, 추천, 비용 — 총 33개)
+pytest services/comparison-engine/tests/ -v
+```
+
+---
+
+## 기여
+
+1. `main` 브랜치에서 feature 브랜치 생성
+2. 변경 사항 구현 및 테스트 작성
+3. PR 생성 — 제목·본문 규칙은 기존 PR 참고
+
+---
+
+## 라이선스
+
+MIT License © 2026 Seungha Lee
