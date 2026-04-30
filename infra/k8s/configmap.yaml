@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-mgmt-config
+  namespace: llm-mgmt
+data:
+  ARTIFACT_SERVICE_URL:   "http://artifact-service:8000"
+  MODEL_REGISTRY_URL:     "http://model-registry-service:8000"
+  COMPARISON_ENGINE_URL:  "http://comparison-engine:8000"
+  AIOPS_SERVICE_URL:      "http://aiops-service:8000"
+  AI_AGENT_RUNNER_URL:    "http://ai-agent-runner:8000"
+  REDIS_URL:              "redis://redis:6379/0"
+  S3_ENDPOINT:            "http://minio:9000"
+  S3_BUCKET:              "llm-management"
+  OLLAMA_BASE_URL:        "http://ollama:11434"
