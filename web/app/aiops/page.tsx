@@ -269,13 +269,13 @@ export default function AIOpsPage() {
                     <div key={idx} className="rounded-lg border border-gray-200 p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <Badge variant="blue">{String(action.action ?? action.type)}</Badge>
-                        {action.confidence && (
+                        {!!action.confidence && (
                           <Badge variant={action.confidence === "high" ? "green" : action.confidence === "medium" ? "yellow" : "gray"}>
                             {String(action.confidence)}
                           </Badge>
                         )}
                       </div>
-                      {action.reason && (
+                      {!!action.reason && (
                         <p className="text-xs text-gray-600">{String(action.reason)}</p>
                       )}
                       {selectedEvent.status === "pending_approval" && !action.approved && (
@@ -297,7 +297,7 @@ export default function AIOpsPage() {
                           </Button>
                         </div>
                       )}
-                      {action.approved && (
+                      {!!action.approved && (
                         <Badge variant="green">승인됨</Badge>
                       )}
                     </div>
