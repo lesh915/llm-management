@@ -1,3 +1,4 @@
+# Build context: project root (.)
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -8,11 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir poetry==1.8.3
 
-COPY pyproject.toml poetry.lock* ./
+COPY services/api-gateway/pyproject.toml services/api-gateway/poetry.lock* ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
 
-COPY api_gateway/ ./api_gateway/
+COPY services/api-gateway/api_gateway/ ./api_gateway/
 
 EXPOSE 8000
 

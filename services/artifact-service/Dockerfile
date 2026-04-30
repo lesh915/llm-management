@@ -1,3 +1,4 @@
+# Build context: project root (.)
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -8,13 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir poetry==1.8.3
 
-COPY pyproject.toml poetry.lock* ./
-COPY ../../packages/shared-types /packages/shared-types
+# shared-types는 루트 컨텍스트 기준 경로로 복사
+COPY packages/shared-types /packages/shared-types
+
+COPY services/artifact-service/pyproject.toml services/artifact-service/poetry.lock* ./
 
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
 
-COPY . .
+COPY services/artifact-service/ .
 
 EXPOSE 8000
 
