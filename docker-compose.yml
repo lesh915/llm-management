@@ -39,8 +39,6 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    ports:
-      - "127.0.0.1:11435:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
