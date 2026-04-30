@@ -38,10 +38,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:11434/api/tags > /dev/null || exit 1"]
+      test: ["CMD", "ollama", "list"]
       interval: 15s
-      timeout: 5s
+      timeout: 10s
       retries: 10
+      start_period: 30s
 
   # Ollama 초기 모델 다운로드 (최초 1회)
   ollama-init:
