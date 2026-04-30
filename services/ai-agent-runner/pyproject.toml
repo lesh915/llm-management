@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "ai-agent-runner"
 version = "0.1.0"
 description = "AI 진단·조치 에이전트 실행 서비스 (FR-D3)"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.29.0",
