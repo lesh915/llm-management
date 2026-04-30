@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-agent-runner"
+version = "0.1.0"
+description = "AI 진단·조치 에이전트 실행 서비스 (FR-D3)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "anthropic>=0.28.0",
+    "httpx>=0.27.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.29.0",
+    "pydantic>=2.7.0",
+    "shared-types @ file:///${PROJECT_ROOT}/packages/shared-types",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23", "pytest-mock>=3.14"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ai_agent_runner"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
