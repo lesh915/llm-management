@@ -210,6 +210,17 @@ services:
       aiops-service:
         condition: service_healthy
 
+  web:
+    build:
+      context: ./web
+    environment:
+      NEXT_PUBLIC_API_URL: http://api-gateway:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   minio_data:

@@ -84,6 +84,7 @@ docker compose up -d
 
 | 서비스 | URL | 역할 |
 |--------|-----|------|
+| **Web UI** | http://localhost:3000 | 관리 대시보드 |
 | **API Gateway** | http://localhost:8000/docs | 통합 진입점 (모든 API) |
 | artifact-service | http://localhost:8001/docs | 에이전트 아티팩트 관리 |
 | model-registry-service | http://localhost:8002/docs | LLM 모델 레지스트리 |
@@ -188,6 +189,7 @@ llm-management/
 ├── infra/
 │   ├── migrations/                # Alembic DB 마이그레이션
 │   └── k8s/                       # Kubernetes 매니페스트
+├── web/                               # Next.js 15 Web UI 대시보드
 ├── docker-compose.yml
 ├── .env.example
 ├── LLM-PRD.md                     # 제품 요구사항 문서
@@ -204,6 +206,7 @@ llm-management/
 | **Phase 2** | 다모델 비교 분석 엔진 (모듈 C) + Celery 병렬 실행 + WebSocket | ✅ 완료 |
 | **Phase 3** | AIOps 모니터링 + AI 에이전트 자동 진단·조치 (모듈 D) | ✅ 완료 |
 | **Phase 4** | API Gateway + LLM 어댑터 테스트 + Alembic 설정 + Kubernetes 매니페스트 | ✅ 완료 |
+| **Phase 5** | Next.js 15 Web UI — 대시보드, 모델 레지스트리, 비교 분석, AIOps 모니터링 | ✅ 완료 |
 
 ---
 
