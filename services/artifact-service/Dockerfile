@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir poetry==1.8.3
+
+COPY pyproject.toml poetry.lock* ./
+COPY ../../packages/shared-types /packages/shared-types
+
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --no-root
+
+COPY . .
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
+  CMD curl -sf http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "artifact_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
