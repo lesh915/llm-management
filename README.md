@@ -84,18 +84,18 @@ docker compose up -d
 
 | 서비스 | URL | 역할 |
 |--------|-----|------|
-| **Web UI** | http://localhost:3000 | 관리 대시보드 |
-| **API Gateway** | http://localhost:8000/docs | 통합 진입점 (모든 API) |
-| artifact-service | http://localhost:8001/docs | 에이전트 아티팩트 관리 |
-| model-registry-service | http://localhost:8002/docs | LLM 모델 레지스트리 |
-| comparison-engine | http://localhost:8003/docs | 다모델 비교 분석 |
-| aiops-service | http://localhost:8004/docs | AIOps 모니터링 |
-| ai-agent-runner | http://localhost:8005/docs | AI 진단 에이전트 |
-| Ollama | http://localhost:11434 | 로컬 LLM 런타임 |
-| MinIO Console | http://localhost:9001 | 오브젝트 스토리지 |
-| Celery Flower | http://localhost:5555 | 비교 태스크 모니터링 |
+| **Web UI** | http://localhost:47001 | 관리 대시보드 |
+| **API Gateway** | http://localhost:47000/docs | 통합 진입점 (모든 API) |
+| artifact-service | http://localhost:47010/docs | 에이전트 아티팩트 관리 |
+| model-registry-service | http://localhost:47011/docs | LLM 모델 레지스트리 |
+| comparison-engine | http://localhost:47012/docs | 다모델 비교 분석 |
+| aiops-service | http://localhost:47013/docs | AIOps 모니터링 |
+| ai-agent-runner | http://localhost:47014/docs | AI 진단 에이전트 |
+| MinIO API | http://localhost:47002 | 오브젝트 스토리지 API |
+| MinIO Console | http://localhost:47003 | 오브젝트 스토리지 UI |
+| Celery Flower | http://localhost:47004 | 비교 태스크 모니터링 |
 
-> **API Gateway를 통한 접근**: 모든 API는 `http://localhost:8000`으로 통합 접근 가능합니다.
+> **API Gateway를 통한 접근**: 모든 API는 `http://localhost:47000`으로 통합 접근 가능합니다.
 
 ### 4. (선택) 로컬 Ollama 모델 자동 등록
 
