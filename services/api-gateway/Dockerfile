@@ -9,18 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir poetry==1.8.3
 
-COPY packages/shared-types /packages/shared-types
-
-COPY services/model-registry-service/pyproject.toml services/model-registry-service/poetry.lock* ./
-
+COPY services/api-gateway/pyproject.toml services/api-gateway/poetry.lock* ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
 
-COPY services/model-registry-service/ .
+COPY services/api-gateway/api_gateway/ ./api_gateway/
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 \
   CMD curl -sf http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "model_registry_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "api_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]

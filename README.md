@@ -82,14 +82,20 @@ docker compose up -d
 
 서비스 포트:
 
-| 서비스 | URL |
-|--------|-----|
-| artifact-service | http://localhost:8001/docs |
-| model-registry-service | http://localhost:8002/docs |
-| comparison-engine | http://localhost:8003/docs |
-| Ollama | http://localhost:11434 |
-| MinIO Console | http://localhost:9001 |
-| Celery Flower | http://localhost:5555 |
+| 서비스 | URL | 역할 |
+|--------|-----|------|
+| **Web UI** | http://localhost:3000 | 관리 대시보드 |
+| **API Gateway** | http://localhost:8000/docs | 통합 진입점 (모든 API) |
+| artifact-service | http://localhost:8001/docs | 에이전트 아티팩트 관리 |
+| model-registry-service | http://localhost:8002/docs | LLM 모델 레지스트리 |
+| comparison-engine | http://localhost:8003/docs | 다모델 비교 분석 |
+| aiops-service | http://localhost:8004/docs | AIOps 모니터링 |
+| ai-agent-runner | http://localhost:8005/docs | AI 진단 에이전트 |
+| Ollama | http://localhost:11434 | 로컬 LLM 런타임 |
+| MinIO Console | http://localhost:9001 | 오브젝트 스토리지 |
+| Celery Flower | http://localhost:5555 | 비교 태스크 모니터링 |
+
+> **API Gateway를 통한 접근**: 모든 API는 `http://localhost:8000`으로 통합 접근 가능합니다.
 
 ### 4. (선택) 로컬 Ollama 모델 자동 등록
 
@@ -171,18 +177,19 @@ curl "http://localhost:8001/artifacts/{artifact_id}/impact\
 ```
 llm-management/
 ├── services/
+│   ├── api-gateway/               # 통합 진입점 — JWT 인증, 역방향 프록시
 │   ├── artifact-service/          # 모듈 A — 에이전트 아티팩트 관리
 │   ├── model-registry-service/    # 모듈 B — LLM 모델 레지스트리
 │   ├── comparison-engine/         # 모듈 C — 다모델 비교 분석
-│   ├── aiops-service/             # 모듈 D — AIOps 모니터링 (Phase 3)
-│   ├── ai-agent-runner/           # 모듈 D — AI 진단 에이전트 (Phase 3)
-│   ├── llm-adapter/               # 공통 — LLM 어댑터 레이어
-│   └── api-gateway/               # 공통 — API 게이트웨이 (예정)
+│   ├── aiops-service/             # 모듈 D — AIOps 모니터링
+│   ├── ai-agent-runner/           # 모듈 D — AI 진단 에이전트 (Claude SDK)
+│   └── llm-adapter/               # 공통 — LLM 어댑터 레이어
 ├── packages/
 │   └── shared-types/              # 공유 ORM 모델 + Pydantic 스키마
 ├── infra/
 │   ├── migrations/                # Alembic DB 마이그레이션
-│   └── k8s/                       # Kubernetes 매니페스트 (예정)
+│   └── k8s/                       # Kubernetes 매니페스트
+├── web/                               # Next.js 15 Web UI 대시보드
 ├── docker-compose.yml
 ├── .env.example
 ├── LLM-PRD.md                     # 제품 요구사항 문서
@@ -197,31 +204,50 @@ llm-management/
 |-------|------|------|
 | **Phase 1** | 에이전트 아티팩트 관리 (모듈 A) + 모델 레지스트리 (모듈 B) + LLM 어댑터 레이어 | ✅ 완료 |
 | **Phase 2** | 다모델 비교 분석 엔진 (모듈 C) + Celery 병렬 실행 + WebSocket | ✅ 완료 |
-| **Phase 3** | AIOps 모니터링 + AI 에이전트 자동 진단·조치 (모듈 D) | 🚧 진행 중 |
+| **Phase 3** | AIOps 모니터링 + AI 에이전트 자동 진단·조치 (모듈 D) | ✅ 완료 |
+| **Phase 4** | API Gateway + LLM 어댑터 테스트 + Alembic 설정 + Kubernetes 매니페스트 | ✅ 완료 |
+| **Phase 5** | Next.js 15 Web UI — 대시보드, 모델 레지스트리, 비교 분석, AIOps 모니터링 | ✅ 완료 |
 
 ---
 
 ## API 문서
 
-각 서비스는 FastAPI 자동 생성 Swagger UI를 제공합니다.
+모든 API는 **API Gateway** (`http://localhost:8000/docs`)를 통해 통합 접근하거나 각 서비스 Swagger UI에서 직접 확인할 수 있습니다.
 
-- Artifact Service: http://localhost:8001/docs
-- Model Registry: http://localhost:8002/docs
-- Comparison Engine: http://localhost:8003/docs
+| 서비스 | Swagger UI |
+|--------|-----------|
+| API Gateway (통합) | http://localhost:8000/docs |
+| Artifact Service | http://localhost:8001/docs |
+| Model Registry | http://localhost:8002/docs |
+| Comparison Engine | http://localhost:8003/docs |
+| AIOps Service | http://localhost:8004/docs |
+| AI Agent Runner | http://localhost:8005/docs |
 
 ---
 
 ## 테스트 실행
 
 ```bash
-# 의존성 분석기 단위 테스트
+# 에이전트 아티팩트 단위 테스트
 pytest services/artifact-service/tests/ -v
 
-# Ollama 메타 추론 단위 테스트
+# 모델 레지스트리 단위 테스트
 pytest services/model-registry-service/tests/ -v
 
 # 비교 엔진 단위 테스트 (지표, 추천, 비용 — 총 33개)
 pytest services/comparison-engine/tests/ -v
+
+# AIOps 규칙 엔진 단위 테스트
+pytest services/aiops-service/tests/ -v
+
+# AI 진단 에이전트 단위 테스트
+pytest services/ai-agent-runner/tests/ -v
+
+# LLM 어댑터 단위 테스트 (어댑터, 팩토리, 도구 변환)
+pytest services/llm-adapter/tests/ -v
+
+# 전체 테스트 일괄 실행
+pytest services/ -v --tb=short
 ```
 
 ---

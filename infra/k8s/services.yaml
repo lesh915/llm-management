@@ -1,0 +1,316 @@
+---
+# artifact-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-service
+  namespace: llm-mgmt
+  labels:
+    app: artifact-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: artifact-service
+  template:
+    metadata:
+      labels:
+        app: artifact-service
+    spec:
+      containers:
+        - name: artifact-service
+          image: llm-mgmt/artifact-service:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: llm-mgmt-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: database-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: encryption-key
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: s3-access-key
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: s3-secret-key
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: artifact-service
+  namespace: llm-mgmt
+spec:
+  selector:
+    app: artifact-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+# model-registry-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-registry-service
+  namespace: llm-mgmt
+  labels:
+    app: model-registry-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model-registry-service
+  template:
+    metadata:
+      labels:
+        app: model-registry-service
+    spec:
+      containers:
+        - name: model-registry-service
+          image: llm-mgmt/model-registry-service:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: llm-mgmt-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: database-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: encryption-key
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-registry-service
+  namespace: llm-mgmt
+spec:
+  selector:
+    app: model-registry-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+# comparison-engine
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comparison-engine
+  namespace: llm-mgmt
+  labels:
+    app: comparison-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: comparison-engine
+  template:
+    metadata:
+      labels:
+        app: comparison-engine
+    spec:
+      containers:
+        - name: comparison-engine
+          image: llm-mgmt/comparison-engine:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: llm-mgmt-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: database-url
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: encryption-key
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: anthropic-api-key
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: openai-api-key
+                  optional: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: comparison-engine
+  namespace: llm-mgmt
+spec:
+  selector:
+    app: comparison-engine
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+# aiops-service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-service
+  namespace: llm-mgmt
+  labels:
+    app: aiops-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aiops-service
+  template:
+    metadata:
+      labels:
+        app: aiops-service
+    spec:
+      containers:
+        - name: aiops-service
+          image: llm-mgmt/aiops-service:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: llm-mgmt-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: database-url
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiops-service
+  namespace: llm-mgmt
+spec:
+  selector:
+    app: aiops-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+# ai-agent-runner
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-runner
+  namespace: llm-mgmt
+  labels:
+    app: ai-agent-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-agent-runner
+  template:
+    metadata:
+      labels:
+        app: ai-agent-runner
+    spec:
+      containers:
+        - name: ai-agent-runner
+          image: llm-mgmt/ai-agent-runner:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: llm-mgmt-config
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-mgmt-secrets
+                  key: anthropic-api-key
+                  optional: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-agent-runner
+  namespace: llm-mgmt
+spec:
+  selector:
+    app: ai-agent-runner
+  ports:
+    - port: 8000
+      targetPort: 8000
