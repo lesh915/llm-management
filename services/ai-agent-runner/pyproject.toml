@@ -15,6 +15,9 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.0",
     "asyncpg>=0.29.0",
     "pydantic>=2.7.0",
+    # LangGraph 에이전트 (AGENT_TYPE=langgraph 시 사용)
+    "langchain-anthropic>=0.3.0",
+    "langgraph>=0.2.0",
     "shared-types @ file:///${PROJECT_ROOT}/packages/shared-types",
 ]
 

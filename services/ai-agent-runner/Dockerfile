@@ -19,7 +19,9 @@ RUN sed -i '/shared-types/d' pyproject.toml \
         "uvicorn[standard]>=0.29.0" \
         "anthropic>=0.28.0" \
         "httpx>=0.27.0" \
-        "pydantic>=2.7.0"
+        "pydantic>=2.7.0" \
+        "langchain-anthropic>=0.3.0" \
+        "langgraph>=0.2.0"
 
 # 소스 복사
 COPY services/ai-agent-runner/ai_agent_runner/ ./ai_agent_runner/
