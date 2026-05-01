@@ -28,8 +28,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "47002:9000"   # MinIO API
+      - "47003:9001"   # MinIO Console UI
     volumes:
       - minio_data:/data
 
@@ -71,7 +71,7 @@ services:
       S3_SECRET_KEY: minioadmin
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
     ports:
-      - "8001:8000"
+      - "47010:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,7 +85,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
     ports:
-      - "8002:8000"
+      - "47011:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,7 +105,7 @@ services:
       OLLAMA_BASE_URL: http://ollama:11434
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
     ports:
-      - "8003:8000"
+      - "47012:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,7 +150,7 @@ services:
         --port=5555
         --broker=redis://redis:6379/0
     ports:
-      - "5555:5555"
+      - "47004:5555"   # Flower UI
     depends_on: [redis, celery-worker]
 
   api-gateway:
@@ -166,7 +166,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:-}
     ports:
-      - "8000:8000"
+      - "47000:8000"   # API Gateway (메인 진입점)
     depends_on:
       - artifact-service
       - model-registry-service
@@ -184,7 +184,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://llm_mgmt:password@postgres:5432/llm_mgmt
       AI_AGENT_RUNNER_URL: http://ai-agent-runner:8000
     ports:
-      - "8004:8000"
+      - "47013:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -206,7 +206,7 @@ services:
       # 에이전트 타입 선택: anthropic (기본값) | langgraph
       AGENT_TYPE: ${AGENT_TYPE:-anthropic}
     ports:
-      - "8005:8000"
+      - "47014:8000"
     depends_on:
       aiops-service:
         condition: service_healthy
@@ -217,7 +217,7 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://api-gateway:8000
     ports:
-      - "3000:3000"
+      - "47001:3000"   # Web UI
     depends_on:
       api-gateway:
         condition: service_healthy
