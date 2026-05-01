@@ -36,20 +36,25 @@ async def publish_progress(
     done: int,
     total: int,
     latency_ms: float = 0.0,
+    case_id: str | None = None,
+    message: str | None = None,
 ) -> None:
     """Publish a progress event to the task channel."""
-    payload = json.dumps({
-        "task_id":    task_id,
-        "model_id":   model_id,
-        "done":       done,
-        "total":      total,
-        "pct":        round(done / total * 100, 1) if total else 0.0,
-        "latency_ms": round(latency_ms, 1),
-    })
+    client = aioredis.from_url(REDIS_URL, decode_responses=True)
     try:
-        await _get_redis().publish(f"task:{task_id}:progress", payload)
-    except Exception:
-        pass   # non-critical; don't fail the eval
+        payload = json.dumps({
+            "task_id":    task_id,
+            "model_id":   model_id,
+            "done":       done,
+            "total":      total,
+            "pct":        round(done / total * 100, 1) if total else 0.0,
+            "latency_ms": round(latency_ms, 1),
+            "case_id":    case_id,
+            "message":    message,
+        })
+        await client.publish(f"task:{task_id}:progress", payload)
+    finally:
+        await client.aclose()
 
 
 async def subscribe_progress(task_id: str):

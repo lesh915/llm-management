@@ -18,6 +18,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`API ${res.status}: ${text}`);
   }
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -69,6 +72,7 @@ export interface ComparisonResult {
   task_id: string;
   model_id: string;
   metrics: Record<string, number>;
+  raw_outputs: any[];
   cost_usd: number;
   created_at: string;
 }
@@ -135,12 +139,23 @@ export const tasksApi = {
     request<{ data: ComparisonTask }>("/tasks", { method: "POST", body: JSON.stringify(body) }),
   run: (id: string) =>
     request<{ data: { task_id: string; status: string } }>(`/tasks/${id}/run`, { method: "POST" }),
+  delete: (id: string) =>
+    request<void>(`/tasks/${id}`, { method: "DELETE" }),
   report: (id: string) =>
-    request<{ data: ComparisonResult[] }>(`/tasks/${id}/report`),
+    request<{ data: { task_id: string; dataset_cases: any[]; results: ComparisonResult[] } }>(`/tasks/${id}/report`),
   recommendation: (id: string, priority: "cost" | "performance" | "balanced" = "balanced") =>
     request<{ data: { recommended_model: string; scores: Record<string, number>; rationale: string } }>(
       `/tasks/${id}/recommendation?priority=${priority}`
     ),
+};
+
+// Datasets
+export const datasetsApi = {
+  list: () => request<{ data: any[] }>("/datasets"),
+  get: (id: string) => request<{ data: any }> (`/datasets/${id}`),
+  create: (body: { id: string; cases: any[] }) =>
+    request<{ data: { id: string } }>("/datasets", { method: "POST", body: JSON.stringify(body) }),
+  delete: (id: string) => request<void>(`/datasets/${id}`, { method: "DELETE" }),
 };
 
 // AIOps Events

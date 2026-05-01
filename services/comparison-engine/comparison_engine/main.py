@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine
-from .routers import tasks, reports, ws
+from .routers import tasks, reports, ws, datasets
 from shared_types.models import Base
 
 
@@ -32,6 +32,7 @@ app.add_middleware(
 
 app.include_router(tasks.router,   prefix="/tasks",   tags=["tasks"])
 app.include_router(reports.router, prefix="/tasks",   tags=["reports"])
+app.include_router(datasets.router, prefix="/datasets", tags=["datasets"])
 app.include_router(ws.router,                         tags=["websocket"])
 
 

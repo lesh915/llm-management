@@ -114,7 +114,7 @@ async def compare_models(
     return {"data": matrix}
 
 
-@router.get("/{model_id}")
+@router.get("/{model_id:path}")
 async def get_model(model_id: str, db: Db):
     m = await db.get(ModelRegistry, model_id)
     if not m:
@@ -122,7 +122,7 @@ async def get_model(model_id: str, db: Db):
     return {"data": _serialize(m)}
 
 
-@router.patch("/{model_id}/status")
+@router.patch("/{model_id:path}/status")
 async def update_model_status(
     model_id: str,
     body: dict,
