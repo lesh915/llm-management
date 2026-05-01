@@ -203,6 +203,8 @@ services:
       MODEL_REGISTRY_URL: http://model-registry-service:8000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       NOTIFICATION_WEBHOOK: ${NOTIFICATION_WEBHOOK:-}
+      # 에이전트 타입 선택: anthropic (기본값) | langgraph
+      AGENT_TYPE: ${AGENT_TYPE:-anthropic}
     ports:
       - "8005:8000"
     depends_on:
