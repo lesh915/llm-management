@@ -38,8 +38,11 @@ async def execute_task(task_id: str) -> list[dict]:
         if not task:
             raise ValueError(f"Task {task_id} not found")
 
-        # Mark as running
+        # Mark as running and clear old results for re-run
         task.status = "running"
+        from shared_types.models import ComparisonResult
+        from sqlalchemy import delete
+        await db.execute(delete(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id)))
         await db.commit()
 
     try:
@@ -75,7 +78,7 @@ async def execute_task(task_id: str) -> list[dict]:
                     task_id=uuid.UUID(task_id),
                     model_id=result["model_id"],
                     metrics=result["metrics"],
-                    raw_outputs=None,   # stored in S3 separately
+                    raw_outputs=result.get("raw_outputs"),
                     cost_usd=result["cost_usd"],
                 ))
 
@@ -83,6 +86,23 @@ async def execute_task(task_id: str) -> list[dict]:
             task_obj.status = "completed"
             task_obj.completed_at = datetime.now(timezone.utc)
             await db.commit()
+
+        # Notify WebSocket subscribers that the task is fully done
+        client = None
+        try:
+            import redis.asyncio as aioredis
+            REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            client = aioredis.from_url(REDIS_URL, decode_responses=True)
+            import json as _json
+            await client.publish(
+                f"task:{task_id}:progress",
+                _json.dumps({"type": "task_done", "task_id": task_id}),
+            )
+        except Exception:
+            pass
+        finally:
+            if client:
+                await client.aclose()
 
         return serialized
 
@@ -93,6 +113,9 @@ async def execute_task(task_id: str) -> list[dict]:
                 task_obj.status = "failed"
                 await db.commit()
         raise
+    finally:
+        from .database import engine
+        await engine.dispose()
 
 
 # ── Preflight check ───────────────────────────────────────────────────────────
@@ -162,6 +185,8 @@ async def _evaluate_model(
                     done=dataset.index(case) + 1,
                     total=len(dataset),
                     latency_ms=latency_ms,
+                    case_id=case.id,
+                    message=case.input_messages[0]["content"][:50] + "..." if case.input_messages else None
                 )
                 return ModelOutput(
                     case_id=case.id,
@@ -203,6 +228,7 @@ async def _evaluate_model(
         "cost_usd": total_cost,
         "output_count": len(outputs),
         "failure_count": sum(1 for o in outputs if o.error),
+        "raw_outputs": [o.__dict__ for o in outputs],
     }
 
 
@@ -219,14 +245,23 @@ async def load_dataset(dataset_id: str) -> list[EvalCase]:
     try:
         return await _load_from_s3(dataset_id)
     except Exception:
-        # Development stub — 3 generic cases
+        # Development stub — 3 realistic cases
         return [
             EvalCase(
-                id=f"case-{i:03d}",
-                input_messages=[{"role": "user", "content": f"Test question {i}"}],
-                expected_output=f"Answer {i}",
+                id="case-001",
+                input_messages=[{"role": "user", "content": "프랑스의 수도는 어디인가요? 도시 이름만 한 단어로 답하세요."}],
+                expected_output="파리",
+            ),
+            EvalCase(
+                id="case-002",
+                input_messages=[{"role": "user", "content": "5 더하기 7은 무엇인가요? 숫자만 답하세요."}],
+                expected_output="12",
+            ),
+            EvalCase(
+                id="case-003",
+                input_messages=[{"role": "user", "content": "'뜨겁다'의 반대말은 무엇인가요? 한 단어로 답하세요."}],
+                expected_output="차갑다",
             )
-            for i in range(1, 4)
         ]
 
 
@@ -267,7 +302,8 @@ async def _fetch_model_metas(model_ids: list[str]) -> dict[str, dict]:
         metas: dict[str, dict] = {}
         for mid in model_ids:
             try:
-                r = await client.get(f"{MODEL_REGISTRY_URL}/models/{mid}")
+                from urllib.parse import quote
+                r = await client.get(f"{MODEL_REGISTRY_URL}/models/{quote(mid, safe='')}")
                 r.raise_for_status()
                 metas[mid] = r.json()["data"]
             except Exception:

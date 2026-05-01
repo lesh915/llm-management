@@ -102,7 +102,7 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       MODEL_REGISTRY_URL: http://model-registry-service:8000
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
     ports:
       - "47012:8000"
@@ -111,6 +111,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Celery worker — comparison task execution
   celery-worker:
@@ -130,7 +132,7 @@ services:
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
       MODEL_REGISTRY_URL: http://model-registry-service:8000
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
@@ -139,6 +141,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Celery Flower — task monitoring UI (optional)
   flower:
@@ -163,7 +167,7 @@ services:
       COMPARISON_ENGINE_URL: http://comparison-engine:8000
       AIOPS_SERVICE_URL: http://aiops-service:8000
       AI_AGENT_RUNNER_URL: http://ai-agent-runner:8000
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-prod}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       GATEWAY_API_KEY: ${GATEWAY_API_KEY:-}
     ports:
       - "47000:8000"   # API Gateway (메인 진입점)

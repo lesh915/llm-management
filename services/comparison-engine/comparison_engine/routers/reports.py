@@ -57,12 +57,20 @@ async def get_report(task_id: str, db: Db):
             for i, r in enumerate(sorted_models)
         ]
 
+    from ..runner import load_dataset
+    dataset = await load_dataset(task.dataset_id)
+    dataset_cases = [
+        {"id": c.id, "input": c.input_messages, "expected": c.expected_output}
+        for c in dataset
+    ]
+
     return {
         "data": {
             "task_id": task_id,
             "task_name": task.name,
             "status": task.status,
             "model_count": len(result_dicts),
+            "dataset_cases": dataset_cases,
             "results": result_dicts,
             "leaderboard": leaderboard,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
@@ -175,6 +183,7 @@ def _ser_result(r: ComparisonResult) -> dict:
     return {
         "model_id": r.model_id,
         "metrics": r.metrics or {},
+        "raw_outputs": r.raw_outputs or [],
         "cost_usd": float(r.cost_usd or 0),
         "is_local": float(r.cost_usd or 0) == 0.0,  # local = zero cost
         "created_at": r.created_at.isoformat() if r.created_at else None,

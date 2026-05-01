@@ -63,8 +63,10 @@ async def delete_task(task_id: str, db: Db):
     t = await db.get(ComparisonTask, uuid.UUID(task_id))
     if not t:
         raise HTTPException(404, "Task not found")
-    if t.status == "running":
-        raise HTTPException(409, "Cannot delete a running task")
+    # Delete related results first to avoid FK constraint issues
+    from sqlalchemy import delete as sql_delete
+    from shared_types.models import ComparisonResult
+    await db.execute(sql_delete(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id)))
     await db.delete(t)
     await db.commit()
 
@@ -84,7 +86,8 @@ async def estimate_cost(task_id: str, db: Db):
     async with httpx.AsyncClient(timeout=10.0) as client:
         for mid in t.model_ids:
             try:
-                r = await client.get(f"{MODEL_REGISTRY_URL}/models/{mid}")
+                from urllib.parse import quote
+                r = await client.get(f"{MODEL_REGISTRY_URL}/models/{quote(mid, safe='')}")
                 r.raise_for_status()
                 meta = r.json()["data"]
                 pricings[mid] = meta.get("pricing", {})
@@ -122,10 +125,7 @@ async def run_task(task_id: str, db: Db, background_tasks: BackgroundTasks):
     t = await db.get(ComparisonTask, uuid.UUID(task_id))
     if not t:
         raise HTTPException(404, "Task not found")
-    if t.status == "running":
-        raise HTTPException(409, "Task is already running")
-    if t.status == "completed":
-        raise HTTPException(409, "Task already completed — create a new task to re-run")
+    # Allow re-running anytime (e.g. if stuck in 'running' or 'completed')
 
     # Dispatch to Celery
     from ..worker import run_comparison_task_celery

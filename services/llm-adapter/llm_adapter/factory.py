@@ -42,7 +42,7 @@ def get_adapter(model_record: dict) -> BaseLLMAdapter:
         model_name, openai_compat, api_key }
     """
     provider: str = model_record["provider"]
-    api_cfg: dict = model_record.get("api_config", {})
+    api_cfg: dict = model_record.get("api_config") or {}
     model_name: str = api_cfg.get("model_name") or model_record["id"]
     endpoint: str = api_cfg.get("endpoint", "")
     raw_key: str | None = api_cfg.get("api_key")
@@ -70,10 +70,13 @@ def get_adapter(model_record: dict) -> BaseLLMAdapter:
             )
 
         case "Ollama":
+            # model_record.id is e.g. "ollama/qwen3.5:latest" → strip provider prefix
+            raw_name = api_cfg.get("model_name") or model_record["id"]
+            clean_name = raw_name.split("/", 1)[-1] if raw_name.startswith("ollama/") else raw_name
             return OllamaAdapter(
-                model_name=model_name,
+                model_name=clean_name,
                 base_url=endpoint or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
-                auto_pull=api_cfg.get("auto_pull", False),
+                auto_pull=api_cfg.get("auto_pull", False) if api_cfg else False,
             )
 
         case "vLLM" | "LMStudio" | "LM Studio" | "LocalAI":
