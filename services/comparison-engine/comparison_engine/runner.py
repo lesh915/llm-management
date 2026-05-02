@@ -19,9 +19,10 @@ from datetime import datetime, timezone
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared_types.models import ComparisonTask, ComparisonResult
+from shared_types.models import ComparisonTask, ComparisonResult, AgentSession, AgentTurn
 from .database import AsyncSessionLocal
 from .metrics import EvalCase, ModelOutput, calculate_metrics
+from .agent_runner import AgentRunner
 from .cost import calculate_cost
 from .progress import publish_progress
 
@@ -40,6 +41,7 @@ async def execute_task(task_id: str) -> list[dict]:
 
         # Mark as running and clear old results for re-run
         task.status = "running"
+        task.error_message = None
         from shared_types.models import ComparisonResult
         from sqlalchemy import delete
         await db.execute(delete(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id)))
@@ -74,13 +76,38 @@ async def execute_task(task_id: str) -> list[dict]:
                 if isinstance(result, Exception):
                     continue   # log and skip failed models
                 serialized.append(result)
-                db.add(ComparisonResult(
+                result_obj = ComparisonResult(
                     task_id=uuid.UUID(task_id),
                     model_id=result["model_id"],
                     metrics=result["metrics"],
                     raw_outputs=result.get("raw_outputs"),
                     cost_usd=result["cost_usd"],
-                ))
+                )
+                db.add(result_obj)
+                await db.flush() # Get result ID
+
+                # Persist trajectories if they exist
+                if "trajectories" in result:
+                    for session_data in result["trajectories"]:
+                        session = AgentSession(
+                            result_id=result_obj.id,
+                            case_id=session_data["case_id"]
+                        )
+                        db.add(session)
+                        await db.flush()
+                        
+                        for turn_data in session_data["turns"]:
+                            turn = AgentTurn(
+                                session_id=session.id,
+                                turn_index=turn_data["turn_index"],
+                                thought=turn_data.get("thought"),
+                                action=turn_data.get("action"),
+                                observation=turn_data.get("observation"),
+                                response=turn_data.get("response"),
+                                state_snapshot=turn_data.get("state_snapshot"),
+                                metrics=turn_data.get("metrics")
+                            )
+                            db.add(turn)
 
             task_obj: ComparisonTask = await db.get(ComparisonTask, uuid.UUID(task_id))
             task_obj.status = "completed"
@@ -106,12 +133,31 @@ async def execute_task(task_id: str) -> list[dict]:
 
         return serialized
 
-    except Exception:
+    except Exception as e:
         async with AsyncSessionLocal() as db:
             task_obj = await db.get(ComparisonTask, uuid.UUID(task_id))
             if task_obj:
                 task_obj.status = "failed"
+                task_obj.error_message = str(e)
                 await db.commit()
+                
+        # Notify WebSocket subscribers that the task failed
+        err_client = None
+        try:
+            import redis.asyncio as aioredis
+            import json as _json
+            REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            err_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+            await err_client.publish(
+                f"task:{task_id}:progress",
+                _json.dumps({"type": "task_failed", "task_id": task_id, "error": str(e)}),
+            )
+        except Exception:
+            pass
+        finally:
+            if err_client:
+                await err_client.aclose()
+                
         raise
     finally:
         from .database import engine
@@ -174,51 +220,71 @@ async def _evaluate_model(
         async with semaphore:
             start = time.monotonic()
             try:
-                resp = await adapter.complete(
-                    messages=case.input_messages,
-                    tools=case.tools or None,
-                )
-                latency_ms = (time.monotonic() - start) * 1000
-                await publish_progress(
-                    task_id=str(task.id),
-                    model_id=model_id,
-                    done=dataset.index(case) + 1,
-                    total=len(dataset),
-                    latency_ms=latency_ms,
-                    case_id=case.id,
-                    message=case.input_messages[0]["content"][:50] + "..." if case.input_messages else None
-                )
-                return ModelOutput(
-                    case_id=case.id,
-                    content=resp.content,
-                    input_tokens=resp.usage.get("input_tokens", 0),
-                    output_tokens=resp.usage.get("output_tokens", 0),
-                    latency_ms=latency_ms,
-                )
+                async with AsyncSessionLocal() as db:
+                    runner = AgentRunner(model_id, adapter, db)
+                    session_result = await runner.run_session(case)
+                    turns = session_result["turns"]
+                    
+                    # Aggregate metrics from turns
+                    total_in = sum(t["metrics"].get("input_tokens", 0) for t in turns)
+                    total_out = sum(t["metrics"].get("output_tokens", 0) for t in turns)
+                    total_lat = sum(t["metrics"].get("latency_ms", 0) for t in turns)
+                    
+                    await publish_progress(
+                        task_id=str(task.id),
+                        model_id=model_id,
+                        done=dataset.index(case) + 1,
+                        total=len(dataset),
+                        latency_ms=total_lat,
+                        case_id=case.id,
+                        message=f"Agent turns: {len(turns)}"
+                    )
+                    
+                    return {
+                        "case_id": case.id,
+                        "turns": turns,
+                        "total_input_tokens": total_in,
+                        "total_output_tokens": total_out,
+                        "total_latency_ms": total_lat,
+                    }
             except Exception as exc:
-                return ModelOutput(
-                    case_id=case.id,
-                    content="",
-                    input_tokens=0,
-                    output_tokens=0,
-                    latency_ms=(time.monotonic() - start) * 1000,
-                    error=str(exc),
-                )
+                return {
+                    "case_id": case.id,
+                    "error": str(exc),
+                    "turns": []
+                }
 
     outputs = await asyncio.gather(*[run_case(c) for c in dataset])
 
+    # Convert agent outputs to ModelOutput format for legacy metrics calculation
+    legacy_outputs = [
+        ModelOutput(
+            case_id=o["case_id"],
+            content=o["turns"][-1].get("response") if o["turns"] else "",
+            input_tokens=o.get("total_input_tokens", 0),
+            output_tokens=o.get("total_output_tokens", 0),
+            latency_ms=o.get("total_latency_ms", 0),
+            error=o.get("error")
+        )
+        for o in outputs
+    ]
+
     metrics = calculate_metrics(
-        outputs=list(outputs),
+        outputs=legacy_outputs,
         dataset=dataset,
         requested_metrics=list(task.metrics),
         pricing=pricing,
         context_window=context_window,
     )
 
+    from .metrics import calculate_agent_metrics
+    agent_metrics = calculate_agent_metrics(outputs)
+    metrics.update(agent_metrics)
+
     total_cost = sum(
         calculate_cost(pricing, {"input_tokens": o.input_tokens,
                                   "output_tokens": o.output_tokens})
-        for o in outputs
+        for o in legacy_outputs
     )
 
     return {
@@ -227,8 +293,9 @@ async def _evaluate_model(
         "metrics": metrics,
         "cost_usd": total_cost,
         "output_count": len(outputs),
-        "failure_count": sum(1 for o in outputs if o.error),
-        "raw_outputs": [o.__dict__ for o in outputs],
+        "failure_count": sum(1 for o in outputs if "error" in o),
+        "raw_outputs": [o.get("error") for o in outputs if "error" in o],
+        "trajectories": outputs
     }
 
 
@@ -298,15 +365,27 @@ async def _save_raw_outputs_to_s3(task_id: str, model_id: str, outputs: list) ->
 # ── Model metadata fetch ──────────────────────────────────────────────────────
 
 async def _fetch_model_metas(model_ids: list[str]) -> dict[str, dict]:
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        metas: dict[str, dict] = {}
-        for mid in model_ids:
-            try:
-                from urllib.parse import quote
-                r = await client.get(f"{MODEL_REGISTRY_URL}/models/{quote(mid, safe='')}")
-                r.raise_for_status()
-                metas[mid] = r.json()["data"]
-            except Exception:
-                metas[mid] = {"id": mid, "provider": "unknown",
-                               "capabilities": {}, "pricing": {}, "api_config": {}}
-        return metas
+    from .database import AsyncSessionLocal
+    from shared_types.models import ModelRegistry
+    from sqlalchemy import select
+
+    metas: dict[str, dict] = {}
+    async with AsyncSessionLocal() as db:
+        stmt = select(ModelRegistry).where(ModelRegistry.id.in_(model_ids))
+        rows = (await db.execute(stmt)).scalars().all()
+        for r in rows:
+            metas[r.id] = {
+                "id": r.id,
+                "provider": r.provider,
+                "is_custom": r.is_custom,
+                "capabilities": r.capabilities,
+                "pricing": r.pricing,
+                "api_config": r.api_config,  # includes encrypted api_key
+            }
+
+    # Fill in unknowns for any missing models
+    for mid in model_ids:
+        if mid not in metas:
+            metas[mid] = {"id": mid, "provider": "unknown", "capabilities": {}, "pricing": {}, "api_config": {}}
+            
+    return metas

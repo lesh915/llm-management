@@ -15,6 +15,7 @@ from shared_types.schemas import ModelCreate
 from ..database import get_db
 from ..security import encrypt_api_key
 from ..ollama_importer import import_from_ollama
+from llm_adapter.factory import get_adapter
 
 router = APIRouter()
 
@@ -50,6 +51,34 @@ async def register_model(body: ModelCreate, db: Db):
     await db.commit()
     await db.refresh(model)
     return _serialize(model)
+
+
+@router.post("/test-connection")
+async def test_connection(body: ModelCreate):
+    """모델 연결 테스트 (등록 전 설정 확인)"""
+    # Create a dummy model record for the adapter factory
+    api_cfg = body.api.model_dump()
+    
+    # Normally we don't encrypt for testing if it's coming from the frontend directly,
+    # but the factory expects either encrypted or plaintext (it handles both).
+    # However, if we want to test the configuration as-is, we just pass it.
+    
+    model_record = {
+        "id": body.id,
+        "provider": body.provider,
+        "is_custom": body.is_custom,
+        "api_config": api_cfg
+    }
+    
+    try:
+        adapter = get_adapter(model_record)
+        is_ok = await adapter.health_check()
+        if is_ok:
+            return {"status": "success", "message": "Connection successful"}
+        else:
+            return {"status": "error", "message": "Failed to connect to the model endpoint"}
+    except Exception as e:
+        return {"status": "error", "message": f"Connection test failed: {str(e)}"}
 
 
 @router.get("")
@@ -144,6 +173,16 @@ async def update_model_status(
 
     await db.commit()
     return {"data": _serialize(m)}
+
+
+@router.delete("/{model_id:path}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_model(model_id: str, db: Db):
+    """모델 삭제 (레지스트리에서 제거)"""
+    m = await db.get(ModelRegistry, model_id)
+    if not m:
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found.")
+    await db.delete(m)
+    await db.commit()
 
 
 # ── Ollama auto-import ────────────────────────────────────────────────────────

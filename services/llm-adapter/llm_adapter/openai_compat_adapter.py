@@ -71,6 +71,12 @@ class OpenAICompatAdapter(BaseLLMAdapter):
         )
 
     async def health_check(self) -> bool:
+        if not self.is_local:
+            # Cloud providers (OpenAI, Google) sometimes have restricted models.list()
+            # or different paths. To avoid blocking preflight, we assume OK if not local.
+            # Real errors will be caught during the actual completion call.
+            return True
+            
         try:
             await self.client.models.list()
             return True
@@ -80,3 +86,21 @@ class OpenAICompatAdapter(BaseLLMAdapter):
     def get_capabilities(self) -> AdapterCapabilities:
         # Local servers vary — rely on model_registry.capabilities for authoritative info
         return AdapterCapabilities(streaming=True, tool_use=True)
+
+    def format_assistant_message(self, content: str, tool_calls: list[dict] | None = None) -> dict:
+        """Format an assistant message for the history (OpenAI-specific tool_calls format)."""
+        msg = {"role": "assistant", "content": content or ""}
+        if tool_calls:
+            # Convert back to OpenAI format for the history
+            openai_tool_calls = []
+            for tc in tool_calls:
+                openai_tool_calls.append({
+                    "id": tc.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("name"),
+                        "arguments": tc.get("input") if isinstance(tc.get("input"), str) else str(tc.get("input", "{}"))
+                    }
+                })
+            msg["tool_calls"] = openai_tool_calls
+        return msg

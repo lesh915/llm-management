@@ -8,6 +8,9 @@ Supported metrics:
     cost_per_query       — mean USD cost per case
     context_utilization  — mean input_tokens / context_window
     failure_rate         — ratio of error/timeout outputs
+    avg_turns            — mean number of turns in agent sessions
+    tool_usage_rate      — ratio of cases where tools were used
+    reasoning_volume     — mean characters of 'thought' per turn
 """
 from __future__ import annotations
 
@@ -81,6 +84,35 @@ def calculate_metrics(
         results["failure_rate"] = _failure_rate(outputs)
 
     return results
+
+
+def calculate_agent_metrics(trajectories: list[dict]) -> dict[str, float]:
+    """Compute agent-specific metrics from trajectories."""
+    if not trajectories:
+        return {}
+    
+    turns_counts = []
+    cases_with_tools = 0
+    total_thought_len = 0
+    total_turns = 0
+    
+    for traj in trajectories:
+        turns = traj.get("turns", [])
+        turns_counts.append(len(turns))
+        
+        has_tool = any(t.get("action") for t in turns)
+        if has_tool:
+            cases_with_tools += 1
+            
+        for turn in turns:
+            total_thought_len += len(turn.get("thought") or "")
+            total_turns += 1
+            
+    return {
+        "avg_turns": statistics.mean(turns_counts) if turns_counts else 0.0,
+        "tool_usage_rate": cases_with_tools / len(trajectories) if trajectories else 0.0,
+        "reasoning_volume": total_thought_len / total_turns if total_turns > 0 else 0.0
+    }
 
 
 # ── Individual metric implementations ────────────────────────────────────────

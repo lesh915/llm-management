@@ -7,29 +7,144 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Table } from "@/components/ui/Table";
 import { StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { tasksApi, modelsApi, datasetsApi, type ComparisonTask, type ComparisonResult } from "@/lib/api";
+import { tasksApi, modelsApi, datasetsApi, artifactsApi, agentsApi, type ComparisonTask, type ComparisonResult, type AgentArtifact, type AgentTrajectory, type AgentTurn } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
+function AgentTrajectoryViewer({ trajectory }: { trajectory?: AgentTrajectory }) {
+  if (!trajectory || !trajectory.turns || trajectory.turns.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-6 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+      <span className="text-xl mb-1">🔍</span>
+      <p className="text-[10px] text-gray-400 font-medium">실행 궤적이 없습니다.</p>
+    </div>
+  );
+
+  return (
+    <div className="mt-4 space-y-4 relative">
+      {/* Vertical Line Connector */}
+      <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-blue-200 via-indigo-100 to-transparent" />
+
+      {trajectory.turns.map((turn, i) => (
+        <div key={i} className="relative pl-8 group">
+          {/* Turn Circle Marker */}
+          <div className="absolute left-0 top-1 w-7 h-7 rounded-full bg-white border-2 border-blue-400 flex items-center justify-center z-10 shadow-sm group-hover:scale-110 transition-transform">
+            <span className="text-[9px] font-black text-blue-600">{i + 1}</span>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-lg transition-all duration-300 hover:border-blue-100">
+            <div className="flex items-center justify-between mb-3 border-b border-gray-50 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[9px] font-bold uppercase tracking-wider border border-blue-100">
+                  TURN {turn.turn_index + 1}
+                </span>
+                {turn.response && <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded-full text-[9px] font-bold uppercase tracking-wider border border-green-100">FINAL</span>}
+              </div>
+              {turn.metrics && (
+                <div className="flex gap-3 text-[9px] text-gray-400 font-mono bg-gray-50 px-2 py-1 rounded-md">
+                  <span className="flex items-center gap-1">⏱️ {(turn.metrics as any).latency_ms?.toFixed(0)}ms</span>
+                  <span className="flex items-center gap-1">🪙 {(turn.metrics as any).input_tokens + (turn.metrics as any).output_tokens} tokens</span>
+                  {(turn.metrics as any).cumulative_tokens && (
+                    <span className="flex items-center gap-1 ml-2 pl-2 border-l border-gray-200">
+                      📊 Cumulative: <span className="text-blue-600">{(turn.metrics as any).cumulative_tokens.toLocaleString()}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="space-y-4">
+              {turn.thought && (
+                <div className="relative">
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase flex items-center gap-1 mb-1.5 tracking-tight">
+                    <span className="text-xs">🧠</span> Reasoning
+                  </span>
+                  <p className="text-[11px] text-indigo-900 italic leading-relaxed bg-indigo-50/20 p-3 rounded-xl border border-indigo-100/50 backdrop-blur-sm">
+                    {turn.thought}
+                  </p>
+                </div>
+              )}
+              
+              {turn.action && (
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50/30 p-3 rounded-xl border border-amber-100/50 shadow-inner">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-bold text-amber-600 uppercase flex items-center gap-1 tracking-tight">
+                      <span className="text-xs">🛠️</span> Tool Call: {String(turn.action.name)}
+                    </span>
+                    <span className="text-[8px] font-mono text-amber-400 bg-white px-1.5 py-0.5 rounded border border-amber-50">ID: {String(turn.action.id).slice(0, 8)}...</span>
+                  </div>
+                  <div className="font-mono text-[10px] text-amber-900 bg-white/60 p-2.5 rounded-lg border border-amber-50/50 break-all overflow-x-auto max-h-32 scrollbar-thin">
+                    <pre className="whitespace-pre-wrap">{JSON.stringify(turn.action.input || turn.action.arguments, null, 2)}</pre>
+                  </div>
+                </div>
+              )}
+              
+              {turn.observation && (
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50/30 p-3 rounded-xl border border-emerald-100/50 shadow-inner">
+                  <span className="text-[9px] font-bold text-emerald-600 uppercase flex items-center gap-1 mb-2 tracking-tight">
+                    <span className="text-xs">📡</span> Environment Feedback
+                  </span>
+                  <div className="text-[11px] text-emerald-900 bg-white/60 p-3 rounded-xl border border-emerald-50/50 leading-relaxed font-mono">
+                    {turn.observation}
+                  </div>
+                </div>
+              )}
+
+              {/* State Change Highlights */}
+              {turn.state_snapshot && Object.keys(turn.state_snapshot).length > 0 && (
+                <div className="pt-2 border-t border-gray-50 flex flex-wrap gap-1.5">
+                  <span className="text-[9px] font-bold text-gray-400 uppercase w-full mb-1">State Updated</span>
+                  {Object.entries(turn.state_snapshot).map(([key, val]) => (
+                    <div key={key} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[9px] flex items-center gap-1.5 border border-gray-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                      <span className="font-bold">{key}:</span>
+                      <span className="truncate max-w-[80px] italic">{String(val)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {turn.response && (
+                <div className="mt-2 pt-4 border-t-2 border-dashed border-blue-50">
+                  <span className="text-[9px] font-black text-blue-600 uppercase flex items-center gap-1 mb-2 tracking-widest">
+                    <span className="text-sm">✨</span> Final Agent Output
+                  </span>
+                  <div className="text-[12px] text-gray-800 font-medium leading-relaxed bg-gradient-to-br from-blue-50 to-white p-4 rounded-2xl border-2 border-blue-100 shadow-sm">
+                    {turn.response}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ComparePage() {
   const { data: tasks, isLoading, mutate } = useSWR("tasks", () => tasksApi.list());
   const { data: models } = useSWR("models", () => modelsApi.list());
   const { data: availableDatasets } = useSWR("datasets", () => datasetsApi.list());
+  const { data: agents } = useSWR("agents", () => agentsApi.list());
 
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     name: "",
     dataset_id: "eval-default",
     model_ids: [] as string[],
-    metrics: ["correctness", "latency_p95", "cost_per_query"],
+    agent_id: "",
+    artifact_id: "",
+    baseline_model_id: ""
   });
+  const [selectedAgentArtifacts, setSelectedAgentArtifacts] = useState<AgentArtifact[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [report, setReport] = useState<ComparisonResult[] | null>(null);
   const [datasetCases, setDatasetCases] = useState<any[] | null>(null);
+  const [artifact, setArtifact] = useState<AgentArtifact | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [activeTaskProgress, setActiveTaskProgress] = useState<{ [model: string]: { done: number, total: number, pct: number, latency_ms: number, case_id?: string, message?: string } }>({});
   const [taskLogs, setTaskLogs] = useState<{ time: string, model: string, msg: string }[]>([]);
@@ -43,11 +158,12 @@ export default function ComparePage() {
         name: form.name,
         dataset_id: form.dataset_id,
         models: form.model_ids,
-        metrics: form.metrics,
-      } as any);
+        artifact_id: form.artifact_id || undefined,
+        baseline_model_id: form.baseline_model_id || undefined,
+      });
       await mutate();
       setCreating(false);
-      setForm({ name: "", dataset_id: "eval-default", model_ids: [], metrics: ["correctness", "latency_p95", "cost_per_query"] });
+      setForm({ name: "", dataset_id: "eval-default", model_ids: [], agent_id: "", artifact_id: "", baseline_model_id: "" });
     } finally {
       setSubmitting(false);
     }
@@ -57,6 +173,8 @@ export default function ComparePage() {
     setRunningTaskId(taskId);
     setActiveTaskProgress({});
     setTaskLogs([]);
+    setSelectedTask(null);
+    setReport(null);
     mutate();
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -79,10 +197,12 @@ export default function ComparePage() {
             ws.close();
             alert("태스크 시작에 실패했습니다.");
           }
-        } else if (data.type === "done") {
+        } else if (data.type === "done" || data.type === "task_done" || data.type === "task_failed") {
           ws.close();
           setRunningTaskId(null);
-          mutate();
+          await mutate();
+          // Auto view report on completion
+          handleViewReport(taskId);
         } else if (data.model_id) {
           setActiveTaskProgress(prev => ({ ...prev, [data.model_id]: data }));
           if (data.message) {
@@ -105,8 +225,8 @@ export default function ComparePage() {
     ws.onclose = () => {
       // If task is still running (WS dropped mid-run), poll until it completes
       const pollId = setInterval(async () => {
-        await mutate();
-        const tasks: ComparisonTask[] = (data as any)?.data ?? [];
+        const fresh = await mutate();
+        const tasks: ComparisonTask[] = (fresh as any)?.data ?? [];
         const current = tasks.find((t: ComparisonTask) => t.id === taskId);
         if (!current || current.status !== "running") {
           clearInterval(pollId);
@@ -127,9 +247,30 @@ export default function ComparePage() {
     setSelectedTask(taskId);
     setReportLoading(true);
     try {
+      console.log("Fetching report for task:", taskId);
       const res = await tasksApi.report(taskId);
       setReport(res.data.results);
       setDatasetCases(res.data.dataset_cases);
+      
+      // Fetch task details to get artifact_id
+      const taskRes = await tasksApi.get(taskId);
+      const task = taskRes.data;
+      console.log("Task details fetched:", task);
+      
+      if (task?.artifact_id) {
+        console.log("Fetching artifact content for ID:", task.artifact_id);
+        try {
+          const art = await artifactsApi.get(task.artifact_id);
+          console.log("Artifact fetched:", art.data);
+          setArtifact(art.data);
+        } catch (e) {
+          console.error("Failed to fetch artifact", e);
+          setArtifact(null);
+        }
+      } else {
+        console.log("No artifact_id found for this task.");
+        setArtifact(null);
+      }
     } finally {
       setReportLoading(false);
     }
@@ -194,7 +335,7 @@ export default function ComparePage() {
           </Button>
 
           {/* 결과 보기 버튼 */}
-          {t.status === "completed" && (
+          {(t.status === "completed" || t.status === "failed") && (
             <Button size="sm" variant="ghost" onClick={() => handleViewReport(t.id)}>
               결과 보기
             </Button>
@@ -269,9 +410,48 @@ export default function ComparePage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">에이전트 선택 (선택 사항)</label>
+                  <select
+                    value={form.agent_id}
+                    onChange={async (e) => {
+                      const agentId = e.target.value;
+                      setForm({ ...form, agent_id: agentId, artifact_id: "" });
+                      if (agentId) {
+                        const res = await agentsApi.listArtifacts(agentId);
+                        setSelectedAgentArtifacts(res.data);
+                      } else {
+                        setSelectedAgentArtifacts([]);
+                      }
+                    }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">선택 안 함 (범용 비교)</option>
+                    {agents?.data.map((a: any) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">기존 프롬프트(Artifact) 선택</label>
+                  <select
+                    value={form.artifact_id}
+                    onChange={(e) => setForm({ ...form, artifact_id: e.target.value })}
+                    disabled={!form.agent_id}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+                    <option value="">프롬프트 선택</option>
+                    {selectedAgentArtifacts.map((art) => (
+                      <option key={art.id} value={art.id}>{art.type} (v{art.version})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-2">비교 모델 선택 (2개 이상)</label>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto mb-4">
                   {models?.data.filter((m) => m.status === "active").map((m) => (
                     <label key={m.id} className="flex items-center gap-2 rounded-lg border border-gray-200 p-2 cursor-pointer hover:bg-gray-50">
                       <input
@@ -281,7 +461,12 @@ export default function ComparePage() {
                           if (e.target.checked) {
                             setForm({ ...form, model_ids: [...form.model_ids, m.id] });
                           } else {
-                            setForm({ ...form, model_ids: form.model_ids.filter((id) => id !== m.id) });
+                            const newModelIds = form.model_ids.filter((id) => id !== m.id);
+                            setForm({ 
+                              ...form, 
+                              model_ids: newModelIds,
+                              baseline_model_id: form.baseline_model_id === m.id ? "" : form.baseline_model_id
+                            });
                           }
                         }}
                       />
@@ -289,6 +474,23 @@ export default function ComparePage() {
                     </label>
                   ))}
                 </div>
+
+                {form.model_ids.length > 0 && (
+                  <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                    <label className="block text-[10px] font-bold text-blue-600 mb-1 uppercase tracking-wider">기준 모델 설정 (기존 에이전트 사용 모델)</label>
+                    <select
+                      value={form.baseline_model_id}
+                      onChange={(e) => setForm({ ...form, baseline_model_id: e.target.value })}
+                      className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                      <option value="">기준 모델 선택 (Delta 분석용)</option>
+                      {form.model_ids.map(id => (
+                        <option key={id} value={id}>{id}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[10px] text-blue-400">선택한 모델을 기준으로 다른 모델들의 성능 변화(가, 나, 다)를 추적합니다.</p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-4 flex gap-2 justify-end">
@@ -370,55 +572,264 @@ export default function ComparePage() {
         {/* 결과 차트 */}
         {selectedTask && (
           <Card>
-            <CardHeader title="비교 결과" subtitle={selectedTask} />
+            <CardHeader 
+              title="비교 결과" 
+              subtitle={tasks?.data.find(t => t.id === selectedTask)?.name || selectedTask} 
+            />
             {reportLoading ? (
               <p className="text-center text-gray-400 py-8">결과를 불러오는 중...</p>
-            ) : chartData.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">결과 데이터가 없습니다.</p>
             ) : (
-              <div className="space-y-6">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 mb-2">정확도 (%)</p>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="model" tick={{ fontSize: 11 }} />
-                      <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Bar dataKey="정확도" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+              <>
+                {/* 에러 메시지 표시 */}
+                {(() => {
+                  const t = tasks?.data.find(t => t.id === selectedTask);
+                  if (t?.status === "failed" && t.error_message) {
+                    return (
+                      <div className="mx-6 mt-2 mb-4 p-4 bg-red-50 border border-red-100 rounded-xl">
+                        <div className="flex items-center gap-2 text-red-700 font-bold text-xs mb-1">
+                          <span className="text-lg">⚠️</span> 분석 중 오류가 발생했습니다
+                        </div>
+                        <p className="text-xs text-red-600 bg-white/50 p-2 rounded border border-red-50 font-mono whitespace-pre-wrap">
+                          {t.error_message}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {chartData.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8">결과 데이터가 없습니다.</p>
+                ) : (
+                  <div className="space-y-6">
+                
+                {/* 기존 프롬프트 표시 영역 */}
+                {artifact && (
+                  <div className="mx-6 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 bg-blue-500 rounded text-white text-[10px] font-bold">ORIGINAL PROMPT</span>
+                        <h4 className="text-sm font-bold text-gray-900">에이전트에서 동작 중인 기존 프롬프트</h4>
+                      </div>
+                      <span className="text-[10px] text-blue-400 font-mono">v{artifact.version}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {(artifact.content as any).system && (
+                        <div>
+                          <span className="block text-[9px] font-bold text-blue-400 uppercase mb-1">System Prompt</span>
+                          <div className="bg-white p-3 rounded-lg border border-blue-50 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed shadow-sm">
+                            {(artifact.content as any).system}
+                          </div>
+                        </div>
+                      )}
+                      {(artifact.content as any).template && (
+                        <div>
+                          <span className="block text-[9px] font-bold text-blue-400 uppercase mb-1">User Template</span>
+                          <div className="bg-white p-3 rounded-lg border border-blue-50 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed shadow-sm">
+                            {(artifact.content as any).template}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-blue-100 flex items-center gap-2 text-[10px] text-blue-500">
+                      <span className="font-bold">목표:</span>
+                      <span>모델 변경 시 위 프롬프트의 의도와 성능이 유지되는지 분석합니다.</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Agent Performance Summary Cards */}
+                {(() => {
+                  if (!report || report.length === 0) return null;
+                  
+                  const avgReasoning = Math.round(report.reduce((acc, r) => acc + (r.metrics.reasoning_volume || 0), 0) / report.length);
+                  const avgToolRate = Math.round((report.reduce((acc, r) => acc + (r.metrics.tool_usage_rate || 0), 0) / report.length) * 100);
+                  const avgTurns = (report.reduce((acc, r) => acc + (r.metrics.avg_turns || 0), 0) / report.length).toFixed(1);
+                  const totalSessions = report.reduce((acc, r) => acc + (r.trajectories?.length || 0), 0);
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mx-6 mb-6">
+                      <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-5 rounded-3xl text-white shadow-xl shadow-blue-200 hover:scale-[1.02] transition-transform cursor-default">
+                        <div className="flex items-center gap-2 mb-2 opacity-80">
+                          <span className="text-sm">🧠</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Avg Reasoning Depth</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black">{avgReasoning}</span>
+                          <span className="text-xs opacity-70">chars/turn</span>
+                        </div>
+                        <div className="mt-2 w-full bg-white/20 h-1 rounded-full overflow-hidden">
+                          <div className="bg-white h-full" style={{ width: '65%' }} />
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-3xl text-white shadow-xl shadow-emerald-200 hover:scale-[1.02] transition-transform cursor-default">
+                        <div className="flex items-center gap-2 mb-2 opacity-80">
+                          <span className="text-sm">🛠️</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Tool Success Rate</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black">{avgToolRate}%</span>
+                          <span className="text-xs opacity-70">avg</span>
+                        </div>
+                        <div className="mt-2 w-full bg-white/20 h-1 rounded-full overflow-hidden">
+                          <div className="bg-white h-full" style={{ width: '82%' }} />
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-3xl text-white shadow-xl shadow-amber-200 hover:scale-[1.02] transition-transform cursor-default">
+                        <div className="flex items-center gap-2 mb-2 opacity-80">
+                          <span className="text-sm">🔄</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Mean Turn Count</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black">{avgTurns}</span>
+                          <span className="text-xs opacity-70">turns</span>
+                        </div>
+                        <div className="mt-2 w-full bg-white/20 h-1 rounded-full overflow-hidden">
+                          <div className="bg-white h-full" style={{ width: '45%' }} />
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-gray-700 to-gray-900 p-5 rounded-3xl text-white shadow-xl shadow-gray-200 hover:scale-[1.02] transition-transform cursor-default">
+                        <div className="flex items-center gap-2 mb-2 opacity-80">
+                          <span className="text-sm">💾</span>
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Total Memory Traces</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-black">{totalSessions}</span>
+                          <span className="text-xs opacity-70">sessions</span>
+                        </div>
+                        <div className="mt-2 w-full bg-white/20 h-1 rounded-full overflow-hidden">
+                          <div className="bg-white h-full" style={{ width: '100%' }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 mb-8">
+                  <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">정확도 (%)</p>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="model" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          labelStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="정확도" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={30} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">레이턴시 (ms)</p>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="model" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          labelStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="레이턴시" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={30} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">추정 비용 (USD)</p>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="model" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          labelStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="비용" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50">
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">모델</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">정확도</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">레이턴시 P95</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">비용 (USD)</th>
+                      <tr className="bg-gray-50/50">
+                        <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-wider">모델</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">정확도</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">레이턴시</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">평균 턴수</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">도구 활용률</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-wider">비용 (USD)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {report?.map((r) => (
-                        <tr key={r.model_id}>
-                          <td className="px-4 py-2 font-mono text-xs text-blue-700">{r.model_id}</td>
-                          <td className="px-4 py-2 text-right">
-                            {r.metrics.correctness != null
-                              ? `${(r.metrics.correctness * 100).toFixed(1)}%`
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-2 text-right">
-                            {r.metrics.latency_p95 != null
-                              ? `${r.metrics.latency_p95.toFixed(0)}ms`
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono text-xs">
-                            ${r.cost_usd?.toFixed(6) ?? "0"}
-                          </td>
-                        </tr>
-                      ))}
+                      {(() => {
+                        const baseline = report?.find(r => r.model_id === tasks?.data.find(t => t.id === selectedTask)?.baseline_model_id);
+                        
+                        return report?.map((r) => {
+                          const isBaseline = r.model_id === baseline?.model_id;
+                          
+                          const getDelta = (val: number | undefined, baseVal: number | undefined, higherBetter = true) => {
+                            if (val == null || baseVal == null || isBaseline) return null;
+                            const diff = val - baseVal;
+                            const percent = (diff / baseVal) * 100;
+                            const improved = higherBetter ? diff > 0 : diff < 0;
+                            return (
+                              <span className={`ml-1.5 text-[9px] font-bold ${improved ? 'text-green-500' : 'text-red-500'}`}>
+                                {diff > 0 ? '+' : ''}{percent.toFixed(1)}%
+                              </span>
+                            );
+                          };
+
+                          return (
+                            <tr key={r.model_id} className={`hover:bg-gray-50/30 ${isBaseline ? 'bg-blue-50/30' : ''}`}>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col">
+                                  <span className="font-mono text-xs text-blue-700 font-bold">{r.model_id}</span>
+                                  {isBaseline && (
+                                    <span className="mt-0.5 text-[8px] font-black bg-blue-500 text-white px-1 py-0.5 rounded w-fit uppercase tracking-tighter">Existing / Baseline</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end">
+                                  <span className="font-bold text-gray-900">{r.metrics.correctness != null ? (r.metrics.correctness * 100).toFixed(1) + '%' : '—'}</span>
+                                  {getDelta(r.metrics.correctness, baseline?.metrics.correctness, true)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end">
+                                  <span className="text-gray-600">{r.metrics.latency_p95 != null ? r.metrics.latency_p95.toFixed(0) + 'ms' : '—'}</span>
+                                  {getDelta(r.metrics.latency_p95, baseline?.metrics.latency_p95, false)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end">
+                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold">{r.metrics.avg_turns?.toFixed(1) ?? '—'} turns</span>
+                                  {getDelta(r.metrics.avg_turns, baseline?.metrics.avg_turns, false)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end">
+                                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold">{(r.metrics.tool_usage_rate || 0 * 100).toFixed(0)}% used</span>
+                                  {getDelta(r.metrics.tool_usage_rate, baseline?.metrics.tool_usage_rate, true)}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-xs text-gray-400">
+                                ${r.cost_usd?.toFixed(6) ?? "0"}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -467,6 +878,20 @@ export default function ComparePage() {
                                     <div className="text-[11px] text-gray-600 line-clamp-3 bg-gray-50 p-1.5 rounded italic">
                                       {output?.error || output?.content || "No response"}
                                     </div>
+                                    
+                                    {/* 에이전트 트래젝토리 보기 */}
+                                    {r.trajectories && r.trajectories.find(t => t.case_id === caseItem.id) && (
+                                      <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <h6 className="text-[10px] font-black text-blue-500 uppercase mb-3 flex items-center gap-2">
+                                          <span className="p-1 bg-blue-500 rounded-full text-[8px] text-white">★</span>
+                                          Execution Trajectory Comparison
+                                        </h6>
+                                        <AgentTrajectoryViewer 
+                                          trajectory={r.trajectories.find(t => t.case_id === caseItem.id)} 
+                                        />
+                                      </div>
+                                    )}
+
                                     <div className="mt-1.5 text-[9px] text-gray-400 text-right">
                                       {output?.latency_ms?.toFixed(0)}ms
                                     </div>
@@ -482,8 +907,10 @@ export default function ComparePage() {
                 )}
               </div>
             )}
-          </Card>
+          </>
         )}
+      </Card>
+    )}
       </div>
     </div>
   );

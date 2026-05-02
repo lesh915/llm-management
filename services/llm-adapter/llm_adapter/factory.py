@@ -50,22 +50,25 @@ def get_adapter(model_record: dict) -> BaseLLMAdapter:
 
     match provider:
         case "Anthropic":
-            return AnthropicAdapter(model_id=model_name, api_key=api_key)
+            key = os.environ.get("ANTHROPIC_API_KEY") if api_key == "local" else api_key
+            return AnthropicAdapter(model_id=model_name, api_key=key or "local")
 
         case "OpenAI":
+            key = os.environ.get("OPENAI_API_KEY") if api_key == "local" else api_key
             return OpenAICompatAdapter(
                 model_id=model_name,
                 base_url="https://api.openai.com/v1",
-                api_key=api_key,
+                api_key=key or "local",
                 is_local=False,
             )
 
         case "Google":
+            key = os.environ.get("GEMINI_API_KEY") if api_key == "local" else api_key
             # Google uses OpenAI-compat via their REST API
             return OpenAICompatAdapter(
                 model_id=model_name,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai",
-                api_key=api_key,
+                api_key=key or "local",
                 is_local=False,
             )
 

@@ -73,7 +73,7 @@ class ModelVariant(Base):
         UUID(as_uuid=True), ForeignKey("agent_artifacts.id", ondelete="CASCADE"), nullable=False
     )
     model_id: Mapped[str] = mapped_column(
-        String(100), ForeignKey("model_registry.id"), nullable=False
+        String(100), ForeignKey("model_registry.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
@@ -90,10 +90,12 @@ class ComparisonTask(Base):
     artifact_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_artifacts.id")
     )
+    baseline_model_id: Mapped[str | None] = mapped_column(String(100))
     model_ids: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
     dataset_id: Mapped[str] = mapped_column(String(255), nullable=False)
     metrics: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -108,7 +110,7 @@ class ComparisonResult(Base):
         UUID(as_uuid=True), ForeignKey("comparison_tasks.id", ondelete="CASCADE"), nullable=False
     )
     model_id: Mapped[str] = mapped_column(
-        String(100), ForeignKey("model_registry.id"), nullable=False
+        String(100), ForeignKey("model_registry.id", ondelete="CASCADE"), nullable=False
     )
     metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
     raw_outputs: Mapped[list | None] = mapped_column(JSONB)
@@ -116,6 +118,40 @@ class ComparisonResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     task: Mapped[ComparisonTask] = relationship("ComparisonTask", back_populates="results")
+    sessions: Mapped[list[AgentSession]] = relationship("AgentSession", back_populates="result", cascade="all, delete-orphan")
+
+
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    result_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("comparison_results.id", ondelete="CASCADE"), nullable=False
+    )
+    case_id: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    turns: Mapped[list[AgentTurn]] = relationship("AgentTurn", back_populates="session", cascade="all, delete-orphan")
+    result: Mapped[ComparisonResult] = relationship("ComparisonResult", back_populates="sessions")
+
+
+class AgentTurn(Base):
+    __tablename__ = "agent_turns"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    thought: Mapped[str | None] = mapped_column(Text)
+    action: Mapped[dict | None] = mapped_column(JSONB)
+    observation: Mapped[str | None] = mapped_column(Text)
+    response: Mapped[str | None] = mapped_column(Text)
+    state_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    metrics: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    session: Mapped[AgentSession] = relationship("AgentSession", back_populates="turns")
 
 
 class OpsMetric(Base):
@@ -135,7 +171,7 @@ class AIOpsEvent(Base):
     agent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agents.id")
     )
-    model_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("model_registry.id"))
+    model_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("model_registry.id", ondelete="SET NULL"))
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     severity: Mapped[str | None] = mapped_column(String(20))
     description: Mapped[str | None] = mapped_column(Text)

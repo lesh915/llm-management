@@ -42,8 +42,8 @@ async def task_progress_ws(websocket: WebSocket, task_id: str):
                 import json
                 event = json.loads(message["data"])
                 # Task fully done → close
-                if event.get("type") == "task_done":
-                    await websocket.send_json({"type": "done", "task_id": task_id})
+                if event.get("type") in ("task_done", "task_failed"):
+                    await websocket.send_json({"type": event.get("type"), "task_id": task_id, "error": event.get("error")})
                     break
                 # Progress update → forward to client
                 await websocket.send_json(event)

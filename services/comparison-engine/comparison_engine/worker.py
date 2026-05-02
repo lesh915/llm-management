@@ -38,5 +38,5 @@ def run_comparison_task_celery(self, task_id: str) -> dict:
         result = asyncio.run(execute_task(task_id))
         return {"status": "completed", "task_id": task_id, "results": result}
     except Exception as exc:
-        self.update_state(state="FAILURE", meta={"error": str(exc)})
+        # Let Celery handle the exception natively so it correctly populates the state
         raise

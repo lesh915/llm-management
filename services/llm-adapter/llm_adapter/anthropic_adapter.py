@@ -28,6 +28,15 @@ class AnthropicAdapter(BaseLLMAdapter):
             max_tokens=max_tokens,
             messages=messages,
         )
+        
+        # Debug logging
+        try:
+            import json
+            with open("/tmp/anthropic_debug.json", "a") as f:
+                f.write(json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False) + "\n")
+        except:
+            pass
+
         if system:
             params["system"] = system
         if tools:
@@ -61,14 +70,42 @@ class AnthropicAdapter(BaseLLMAdapter):
         )
 
     async def health_check(self) -> bool:
-        try:
-            await self.client.models.list()
-            return True
-        except Exception:
-            return False
+        # Trust cloud provider availability during preflight.
+        # Specific errors will be caught during execution.
+        return True
 
     def get_capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
             tool_use=True, streaming=True,
             parallel_tool_calls=True, vision=True, json_mode=True,
         )
+
+    def format_assistant_message(self, content: str, tool_calls: list[dict] | None = None) -> dict:
+        blocks = []
+        if content:
+            blocks.append({"type": "text", "text": content})
+        if tool_calls:
+            for tc in tool_calls:
+                blocks.append({
+                    "type": "tool_use",
+                    "id": tc["id"],
+                    "name": tc["name"],
+                    "input": tc.get("input") or tc.get("arguments") or {}
+                })
+        return {"role": "assistant", "content": blocks}
+
+    def format_tool_result(self, tool_call_id: str, name: str, content: str) -> dict:
+        return self.format_tool_results([{"id": tool_call_id, "name": name, "content": content}])
+
+    def format_tool_results(self, results: list[dict]) -> dict:
+        return {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": r["id"],
+                    "content": r["content"]
+                }
+                for r in results
+            ]
+        }

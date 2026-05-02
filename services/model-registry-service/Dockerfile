@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir poetry==1.8.3
 
 COPY packages/shared-types /packages/shared-types
+COPY services/llm-adapter /services/llm-adapter
 
 COPY services/model-registry-service/pyproject.toml services/model-registry-service/poetry.lock* ./
 
