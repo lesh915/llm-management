@@ -445,20 +445,39 @@ export default function ModelsPage() {
               </div>
             </div>
 
-            {selected.status === "active" && (
+            <div className="pt-4 border-t border-gray-100 space-y-2">
+              {selected.status === "active" && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={async () => {
+                    await modelsApi.patchStatus(selected.id, "deprecated");
+                    mutate();
+                    setSelected(null);
+                  }}
+                >
+                  Deprecated 처리
+                </Button>
+              )}
               <Button
                 variant="danger"
                 size="sm"
                 className="w-full"
                 onClick={async () => {
-                  await modelsApi.patchStatus(selected.id, "deprecated");
-                  mutate();
-                  setSelected(null);
+                  if (!confirm(`정말 '${selected.id}' 모델을 삭제하시겠습니까?`)) return;
+                  try {
+                    await modelsApi.delete(selected.id);
+                    mutate();
+                    setSelected(null);
+                  } catch (err) {
+                    alert("삭제 중 오류가 발생했습니다.");
+                  }
                 }}
               >
-                Deprecated 처리
+                영구 삭제
               </Button>
-            )}
+            </div>
           </div>
         )}
       </div>

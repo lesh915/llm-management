@@ -73,7 +73,7 @@ class ModelVariant(Base):
         UUID(as_uuid=True), ForeignKey("agent_artifacts.id", ondelete="CASCADE"), nullable=False
     )
     model_id: Mapped[str] = mapped_column(
-        String(100), ForeignKey("model_registry.id"), nullable=False
+        String(100), ForeignKey("model_registry.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
@@ -109,7 +109,7 @@ class ComparisonResult(Base):
         UUID(as_uuid=True), ForeignKey("comparison_tasks.id", ondelete="CASCADE"), nullable=False
     )
     model_id: Mapped[str] = mapped_column(
-        String(100), ForeignKey("model_registry.id"), nullable=False
+        String(100), ForeignKey("model_registry.id", ondelete="CASCADE"), nullable=False
     )
     metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
     raw_outputs: Mapped[list | None] = mapped_column(JSONB)
@@ -136,7 +136,7 @@ class AIOpsEvent(Base):
     agent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agents.id")
     )
-    model_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("model_registry.id"))
+    model_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("model_registry.id", ondelete="SET NULL"))
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     severity: Mapped[str | None] = mapped_column(String(20))
     description: Mapped[str | None] = mapped_column(Text)

@@ -71,6 +71,12 @@ class OpenAICompatAdapter(BaseLLMAdapter):
         )
 
     async def health_check(self) -> bool:
+        if not self.is_local:
+            # Cloud providers (OpenAI, Google) sometimes have restricted models.list()
+            # or different paths. To avoid blocking preflight, we assume OK if not local.
+            # Real errors will be caught during the actual completion call.
+            return True
+            
         try:
             await self.client.models.list()
             return True

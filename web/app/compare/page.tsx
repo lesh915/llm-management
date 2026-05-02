@@ -57,6 +57,8 @@ export default function ComparePage() {
     setRunningTaskId(taskId);
     setActiveTaskProgress({});
     setTaskLogs([]);
+    setSelectedTask(null);
+    setReport(null);
     mutate();
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -82,7 +84,9 @@ export default function ComparePage() {
         } else if (data.type === "done" || data.type === "task_done" || data.type === "task_failed") {
           ws.close();
           setRunningTaskId(null);
-          mutate();
+          await mutate();
+          // Auto view report on completion
+          handleViewReport(taskId);
         } else if (data.model_id) {
           setActiveTaskProgress(prev => ({ ...prev, [data.model_id]: data }));
           if (data.message) {

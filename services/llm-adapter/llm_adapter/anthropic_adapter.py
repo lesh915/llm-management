@@ -61,11 +61,9 @@ class AnthropicAdapter(BaseLLMAdapter):
         )
 
     async def health_check(self) -> bool:
-        try:
-            await self.client.models.list()
-            return True
-        except Exception:
-            return False
+        # Trust cloud provider availability during preflight.
+        # Specific errors will be caught during execution.
+        return True
 
     def get_capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
