@@ -79,7 +79,7 @@ export default function ComparePage() {
             ws.close();
             alert("태스크 시작에 실패했습니다.");
           }
-        } else if (data.type === "done") {
+        } else if (data.type === "done" || data.type === "task_done" || data.type === "task_failed") {
           ws.close();
           setRunningTaskId(null);
           mutate();
@@ -105,8 +105,8 @@ export default function ComparePage() {
     ws.onclose = () => {
       // If task is still running (WS dropped mid-run), poll until it completes
       const pollId = setInterval(async () => {
-        await mutate();
-        const tasks: ComparisonTask[] = (data as any)?.data ?? [];
+        const fresh = await mutate();
+        const tasks: ComparisonTask[] = (fresh as any)?.data ?? [];
         const current = tasks.find((t: ComparisonTask) => t.id === taskId);
         if (!current || current.status !== "running") {
           clearInterval(pollId);
@@ -194,7 +194,7 @@ export default function ComparePage() {
           </Button>
 
           {/* 결과 보기 버튼 */}
-          {t.status === "completed" && (
+          {(t.status === "completed" || t.status === "failed") && (
             <Button size="sm" variant="ghost" onClick={() => handleViewReport(t.id)}>
               결과 보기
             </Button>
@@ -370,13 +370,36 @@ export default function ComparePage() {
         {/* 결과 차트 */}
         {selectedTask && (
           <Card>
-            <CardHeader title="비교 결과" subtitle={selectedTask} />
+            <CardHeader 
+              title="비교 결과" 
+              subtitle={tasks?.data.find(t => t.id === selectedTask)?.name || selectedTask} 
+            />
             {reportLoading ? (
               <p className="text-center text-gray-400 py-8">결과를 불러오는 중...</p>
-            ) : chartData.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">결과 데이터가 없습니다.</p>
             ) : (
-              <div className="space-y-6">
+              <>
+                {/* 에러 메시지 표시 */}
+                {(() => {
+                  const t = tasks?.data.find(t => t.id === selectedTask);
+                  if (t?.status === "failed" && t.error_message) {
+                    return (
+                      <div className="mx-6 mt-2 mb-4 p-4 bg-red-50 border border-red-100 rounded-xl">
+                        <div className="flex items-center gap-2 text-red-700 font-bold text-xs mb-1">
+                          <span className="text-lg">⚠️</span> 분석 중 오류가 발생했습니다
+                        </div>
+                        <p className="text-xs text-red-600 bg-white/50 p-2 rounded border border-red-50 font-mono whitespace-pre-wrap">
+                          {t.error_message}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {chartData.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8">결과 데이터가 없습니다.</p>
+                ) : (
+                  <div className="space-y-6">
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-2">정확도 (%)</p>
                   <ResponsiveContainer width="100%" height={200}>
@@ -482,8 +505,10 @@ export default function ComparePage() {
                 )}
               </div>
             )}
-          </Card>
+          </>
         )}
+      </Card>
+    )}
       </div>
     </div>
   );

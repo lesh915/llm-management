@@ -40,6 +40,7 @@ async def execute_task(task_id: str) -> list[dict]:
 
         # Mark as running and clear old results for re-run
         task.status = "running"
+        task.error_message = None
         from shared_types.models import ComparisonResult
         from sqlalchemy import delete
         await db.execute(delete(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id)))
@@ -106,12 +107,31 @@ async def execute_task(task_id: str) -> list[dict]:
 
         return serialized
 
-    except Exception:
+    except Exception as e:
         async with AsyncSessionLocal() as db:
             task_obj = await db.get(ComparisonTask, uuid.UUID(task_id))
             if task_obj:
                 task_obj.status = "failed"
+                task_obj.error_message = str(e)
                 await db.commit()
+                
+        # Notify WebSocket subscribers that the task failed
+        err_client = None
+        try:
+            import redis.asyncio as aioredis
+            import json as _json
+            REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            err_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+            await err_client.publish(
+                f"task:{task_id}:progress",
+                _json.dumps({"type": "task_failed", "task_id": task_id, "error": str(e)}),
+            )
+        except Exception:
+            pass
+        finally:
+            if err_client:
+                await err_client.aclose()
+                
         raise
     finally:
         from .database import engine
@@ -298,15 +318,27 @@ async def _save_raw_outputs_to_s3(task_id: str, model_id: str, outputs: list) ->
 # ── Model metadata fetch ──────────────────────────────────────────────────────
 
 async def _fetch_model_metas(model_ids: list[str]) -> dict[str, dict]:
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        metas: dict[str, dict] = {}
-        for mid in model_ids:
-            try:
-                from urllib.parse import quote
-                r = await client.get(f"{MODEL_REGISTRY_URL}/models/{quote(mid, safe='')}")
-                r.raise_for_status()
-                metas[mid] = r.json()["data"]
-            except Exception:
-                metas[mid] = {"id": mid, "provider": "unknown",
-                               "capabilities": {}, "pricing": {}, "api_config": {}}
-        return metas
+    from .database import AsyncSessionLocal
+    from shared_types.models import ModelRegistry
+    from sqlalchemy import select
+
+    metas: dict[str, dict] = {}
+    async with AsyncSessionLocal() as db:
+        stmt = select(ModelRegistry).where(ModelRegistry.id.in_(model_ids))
+        rows = (await db.execute(stmt)).scalars().all()
+        for r in rows:
+            metas[r.id] = {
+                "id": r.id,
+                "provider": r.provider,
+                "is_custom": r.is_custom,
+                "capabilities": r.capabilities,
+                "pricing": r.pricing,
+                "api_config": r.api_config,  # includes encrypted api_key
+            }
+
+    # Fill in unknowns for any missing models
+    for mid in model_ids:
+        if mid not in metas:
+            metas[mid] = {"id": mid, "provider": "unknown", "capabilities": {}, "pricing": {}, "api_config": {}}
+            
+    return metas

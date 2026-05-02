@@ -69,7 +69,7 @@ services:
       S3_BUCKET: llm-management
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-mTsKNjREKUilAzn8AuFUj1K9IKmzIiR8xAXbbqqZON4=}
     ports:
       - "47010:8000"
     depends_on:
@@ -83,7 +83,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://llm_mgmt:password@postgres:5432/llm_mgmt
       REDIS_URL: redis://redis:6379/0
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-mTsKNjREKUilAzn8AuFUj1K9IKmzIiR8xAXbbqqZON4=}
     ports:
       - "47011:8000"
     depends_on:
@@ -103,7 +103,7 @@ services:
       S3_SECRET_KEY: minioadmin
       MODEL_REGISTRY_URL: http://model-registry-service:8000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-mTsKNjREKUilAzn8AuFUj1K9IKmzIiR8xAXbbqqZON4=}
     ports:
       - "47012:8000"
     depends_on:
@@ -135,7 +135,7 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-Zg9_jRkP2vXnQwLmT4sBhC7dEuFyN0aI3oV6pY1cW8=}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-mTsKNjREKUilAzn8AuFUj1K9IKmzIiR8xAXbbqqZON4=}
     depends_on:
       postgres:
         condition: service_healthy

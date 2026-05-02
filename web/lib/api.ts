@@ -54,6 +54,7 @@ export interface Model {
   capabilities: Record<string, unknown>;
   characteristics: Record<string, unknown>;
   pricing: { input_per_1m_tokens: number; output_per_1m_tokens: number };
+  api_config?: Record<string, unknown>;
 }
 
 export interface ComparisonTask {
@@ -63,6 +64,7 @@ export interface ComparisonTask {
   dataset_id: string;
   metrics: string[];
   status: "pending" | "running" | "completed" | "failed";
+  error_message?: string;
   created_at: string;
   completed_at?: string;
 }
@@ -129,6 +131,13 @@ export const modelsApi = {
     }),
   compare: (ids: string[]) =>
     request<{ data: Record<string, Model> }>(`/models/compare?model_ids=${ids.join(",")}`),
+  delete: (id: string) =>
+    request<void>(`/models/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  testConnection: (body: any) =>
+    request<{ status: "success" | "error"; message: string }>("/models/test-connection", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
 
 // Comparison Tasks

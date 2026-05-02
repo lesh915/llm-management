@@ -27,7 +27,7 @@ async def get_report(task_id: str, db: Db):
     task = await db.get(ComparisonTask, uuid.UUID(task_id))
     if not task:
         raise HTTPException(404, "Task not found")
-    if task.status not in ("completed", "running"):
+    if task.status not in ("completed", "running", "failed"):
         raise HTTPException(400, f"Task status is '{task.status}'. Run the task first.")
 
     stmt = select(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id))
@@ -69,6 +69,7 @@ async def get_report(task_id: str, db: Db):
             "task_id": task_id,
             "task_name": task.name,
             "status": task.status,
+            "error_message": task.error_message,
             "model_count": len(result_dicts),
             "dataset_cases": dataset_cases,
             "results": result_dicts,
