@@ -91,3 +91,80 @@ curl "http://localhost:47000/artifacts/{artifact_id}/impact?source_model_id=clau
 - **버전 관리**: 아티팩트를 수정할 때마다 자동으로 버전이 업데이트되며, 이전 버전은 S3(MinIO)에 스냅샷으로 보관됩니다.
 - **의존성 체크**: 새로운 모델을 도입하기 전, 반드시 영향 분석 API를 통해 아티팩트의 호환성을 먼저 확인하십시오.
 - **변형 활용**: 성능 차이가 큰 모델 간 이동 시(예: GPT-4o → Llama 3), 공통 아티팩트보다는 모델별 Variant를 생성하여 최적화된 프롬프트를 적용하는 것을 권장합니다.
+---
+
+## 6. 외부 프로젝트 연동 가이드 (Python)
+
+독립적으로 동작하는 에이전트 프로젝트(예: Trading Bot, 분석 스크립트 등)를 본 시스템에 연동하여 실시간 지표를 수집하고 AI 진단을 받는 방법입니다.
+
+### 6.1 연동용 어댑터 클래스 (`mgmt_adapter.py`)
+
+에이전트 프로젝트 내부에 아래 클래스를 추가하여 LLM 호출 시마다 지표를 보고합니다.
+
+```python
+import requests
+import time
+from datetime import datetime
+from typing import Optional
+
+class LLMManagementAdapter:
+    def __init__(self, agent_id: str, base_url: str = "http://localhost:47000"):
+        self.agent_id = agent_id
+        self.base_url = base_url
+
+    def report_call(self, model_id: str, input_tokens: int, output_tokens: int, 
+                    latency_ms: float, success: bool = True, error_msg: Optional[str] = None):
+        """지표 및 이벤트를 시스템에 보고합니다."""
+        # 1. 지표(Metrics) 전송
+        metrics = [
+            {"name": "latency", "val": latency_ms},
+            {"name": "input_tokens", "val": float(input_tokens)},
+            {"name": "output_tokens", "val": float(output_tokens)},
+            {"name": "success_rate", "val": 1.0 if success else 0.0}
+        ]
+        for m in metrics:
+            payload = {
+                "agent_id": self.agent_id,
+                "model_id": model_id,
+                "metric_name": m["name"],
+                "value": m["val"]
+            }
+            try:
+                requests.post(f"{self.base_url}/metrics", json=payload, timeout=1)
+            except: pass
+
+        # 2. 장애 이벤트(Event) 전송 (실패 시)
+        if not success and error_msg:
+            event = {
+                "agent_id": self.agent_id,
+                "model_id": model_id,
+                "event_type": "llm_failure",
+                "severity": "high",
+                "description": error_msg
+            }
+            try:
+                requests.post(f"{self.base_url}/events", json=event, timeout=1)
+            except: pass
+```
+
+### 6.2 적용 예시
+
+```python
+mgmt = LLMManagementAdapter(agent_id="YOUR_AGENT_UUID")
+
+start = time.time()
+try:
+    # LLM 호출 실행
+    response = client.messages.create(model="claude-4-sonnet", ...)
+    
+    # 성공 지표 보고
+    mgmt.report_call(
+        model_id="claude-4-sonnet",
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+        latency_ms=(time.time() - start) * 1000
+    )
+except Exception as e:
+    # 실패 이벤트 보고
+    mgmt.report_call(model_id="claude-4-sonnet", ..., success=False, error_msg=str(e))
+```

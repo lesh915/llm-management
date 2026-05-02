@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared_types.models import ComparisonTask, ComparisonResult
+from shared_types.models import ComparisonTask, ComparisonResult, AgentSession, AgentTurn
+from sqlalchemy.orm import selectinload
 from ..database import get_db
 from ..recommender import recommend_model
 
@@ -30,7 +31,9 @@ async def get_report(task_id: str, db: Db):
     if task.status not in ("completed", "running", "failed"):
         raise HTTPException(400, f"Task status is '{task.status}'. Run the task first.")
 
-    stmt = select(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id))
+    stmt = select(ComparisonResult).where(ComparisonResult.task_id == uuid.UUID(task_id)).options(
+        selectinload(ComparisonResult.sessions).selectinload(AgentSession.turns)
+    )
     results = (await db.execute(stmt)).scalars().all()
 
     if not results:
@@ -186,6 +189,24 @@ def _ser_result(r: ComparisonResult) -> dict:
         "metrics": r.metrics or {},
         "raw_outputs": r.raw_outputs or [],
         "cost_usd": float(r.cost_usd or 0),
-        "is_local": float(r.cost_usd or 0) == 0.0,  # local = zero cost
+        "is_local": float(r.cost_usd or 0) == 0.0,
+        "trajectories": [
+            {
+                "case_id": s.case_id,
+                "turns": [
+                    {
+                        "turn_index": t.turn_index,
+                        "thought": t.thought,
+                        "action": t.action,
+                        "observation": t.observation,
+                        "response": t.response,
+                        "state_snapshot": t.state_snapshot,
+                        "metrics": t.metrics
+                    }
+                    for t in sorted(s.turns, key=lambda x: x.turn_index)
+                ]
+            }
+            for s in r.sessions
+        ],
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }

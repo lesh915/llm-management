@@ -81,6 +81,14 @@ async def list_artifacts(agent_id: str, db: Db):
     return {"data": [_ser_artifact(r) for r in rows]}
 
 
+@router.get("/artifacts/{artifact_id}")
+async def get_artifact(artifact_id: str, db: Db):
+    art = await db.get(AgentArtifact, uuid.UUID(artifact_id))
+    if not art:
+        raise HTTPException(404, "Artifact not found")
+    return {"data": _ser_artifact(art)}
+
+
 @router.post("/artifacts/{artifact_id}/analyze")
 async def analyze_artifact(artifact_id: str, db: Db):
     """Re-run dependency analysis on an existing artifact (FR-A2)."""
@@ -224,6 +232,7 @@ def _ser_artifact(art: AgentArtifact) -> dict:
     return {
         "id": str(art.id), "agent_id": str(art.agent_id),
         "type": art.type, "version": art.version,
+        "content": art.content,
         "model_requirements": art.model_requirements or [],
         "created_at": art.created_at.isoformat() if art.created_at else None,
     }

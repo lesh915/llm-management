@@ -90,6 +90,7 @@ class ComparisonTask(Base):
     artifact_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_artifacts.id")
     )
+    baseline_model_id: Mapped[str | None] = mapped_column(String(100))
     model_ids: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
     dataset_id: Mapped[str] = mapped_column(String(255), nullable=False)
     metrics: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)
@@ -117,6 +118,40 @@ class ComparisonResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     task: Mapped[ComparisonTask] = relationship("ComparisonTask", back_populates="results")
+    sessions: Mapped[list[AgentSession]] = relationship("AgentSession", back_populates="result", cascade="all, delete-orphan")
+
+
+class AgentSession(Base):
+    __tablename__ = "agent_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    result_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("comparison_results.id", ondelete="CASCADE"), nullable=False
+    )
+    case_id: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    turns: Mapped[list[AgentTurn]] = relationship("AgentTurn", back_populates="session", cascade="all, delete-orphan")
+    result: Mapped[ComparisonResult] = relationship("ComparisonResult", back_populates="sessions")
+
+
+class AgentTurn(Base):
+    __tablename__ = "agent_turns"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    turn_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    thought: Mapped[str | None] = mapped_column(Text)
+    action: Mapped[dict | None] = mapped_column(JSONB)
+    observation: Mapped[str | None] = mapped_column(Text)
+    response: Mapped[str | None] = mapped_column(Text)
+    state_snapshot: Mapped[dict | None] = mapped_column(JSONB)
+    metrics: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    session: Mapped[AgentSession] = relationship("AgentSession", back_populates="turns")
 
 
 class OpsMetric(Base):

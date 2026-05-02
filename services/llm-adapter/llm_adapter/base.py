@@ -41,3 +41,30 @@ class BaseLLMAdapter(ABC):
 
     def get_capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities()
+
+    def format_assistant_message(self, content: str, tool_calls: list[dict] | None = None) -> dict:
+        """Format an assistant message for the conversation history."""
+        msg = {"role": "assistant", "content": content or ""}
+        if tool_calls:
+            msg["tool_calls"] = tool_calls
+        return msg
+
+    def format_tool_result(self, tool_call_id: str, name: str, content: str) -> dict:
+        """Format a single tool result message for the conversation history."""
+        return self.format_tool_results([{"id": tool_call_id, "name": name, "content": content}])
+
+    def format_tool_results(self, results: list[dict]) -> list[dict] | dict:
+        """
+        Format multiple tool results for the conversation history.
+        Expected result dict: {"id": str, "name": str, "content": str}
+        """
+        # Default to OpenAI format (separate messages per tool call)
+        msgs = []
+        for r in results:
+            msgs.append({
+                "role": "tool",
+                "tool_call_id": r["id"],
+                "name": r["name"],
+                "content": r["content"]
+            })
+        return msgs

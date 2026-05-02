@@ -68,6 +68,9 @@ class OllamaAdapter(BaseLLMAdapter):
     def get_capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(tool_use=True, streaming=True)
 
+    def format_assistant_message(self, content: str, tool_calls: list[dict] | None = None) -> dict:
+        return self._compat.format_assistant_message(content, tool_calls)
+
     # ── Ollama-specific helpers ───────────────────────────────────────────────
 
     async def list_local_models(self) -> list[str]:

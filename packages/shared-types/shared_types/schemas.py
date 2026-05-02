@@ -92,6 +92,7 @@ class ArtifactRead(ArtifactCreate):
 class ComparisonTaskCreate(BaseModel):
     name: str
     artifact_id: str | None = None
+    baseline_model_id: str | None = None
     models: list[str] = Field(..., min_length=2, description="비교할 모델 ID 목록 (최소 2개)")
     dataset_id: str
     metrics: list[str] = Field(
@@ -101,6 +102,22 @@ class ComparisonTaskCreate(BaseModel):
         default=2, ge=1, le=10,
         description="로컬 모델 동시 요청 수 제한"
     )
+
+
+class AgentTurnRead(BaseModel):
+    turn_index: int
+    thought: str | None = None
+    action: dict | None = None
+    observation: str | None = None
+    response: str | None = None
+    state_snapshot: dict | None = None
+    metrics: dict | None = None
+
+
+class AgentSessionRead(BaseModel):
+    id: str
+    case_id: str
+    turns: list[AgentTurnRead] = []
 
 
 # ── Common Response Wrappers ──────────────────────────────────────────────────

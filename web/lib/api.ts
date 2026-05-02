@@ -60,6 +60,8 @@ export interface Model {
 export interface ComparisonTask {
   id: string;
   name: string;
+  artifact_id?: string;
+  baseline_model_id?: string;
   model_ids: string[];
   dataset_id: string;
   metrics: string[];
@@ -69,12 +71,28 @@ export interface ComparisonTask {
   completed_at?: string;
 }
 
+export interface AgentTurn {
+  turn_index: number;
+  thought?: string;
+  action?: Record<string, unknown>;
+  observation?: string;
+  response?: string;
+  state_snapshot?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
+}
+
+export interface AgentTrajectory {
+  case_id: string;
+  turns: AgentTurn[];
+}
+
 export interface ComparisonResult {
   id: string;
   task_id: string;
   model_id: string;
   metrics: Record<string, number>;
   raw_outputs: any[];
+  trajectories?: AgentTrajectory[];
   cost_usd: number;
   created_at: string;
 }
@@ -116,6 +134,8 @@ export const agentsApi = {
   get:  (id: string) => request<{ data: Agent }>(`/agents/${id}`),
   create: (body: Partial<Agent>) =>
     request<{ data: Agent }>("/agents", { method: "POST", body: JSON.stringify(body) }),
+  listArtifacts: (agentId: string) =>
+    request<{ data: AgentArtifact[] }>(`/agents/${agentId}/artifacts`),
 };
 
 // Models
@@ -140,11 +160,20 @@ export const modelsApi = {
     }),
 };
 
+export interface ComparisonTaskCreate {
+  name: string;
+  dataset_id: string;
+  models: string[];
+  artifact_id?: string;
+  baseline_model_id?: string;
+  metrics?: string[];
+}
+
 // Comparison Tasks
 export const tasksApi = {
   list: () => request<{ data: ComparisonTask[]; meta: { count: number } }>("/tasks"),
   get:  (id: string) => request<{ data: ComparisonTask }>(`/tasks/${id}`),
-  create: (body: Partial<ComparisonTask>) =>
+  create: (body: ComparisonTaskCreate) =>
     request<{ data: ComparisonTask }>("/tasks", { method: "POST", body: JSON.stringify(body) }),
   run: (id: string) =>
     request<{ data: { task_id: string; status: string } }>(`/tasks/${id}/run`, { method: "POST" }),
@@ -156,6 +185,11 @@ export const tasksApi = {
     request<{ data: { recommended_model: string; scores: Record<string, number>; rationale: string } }>(
       `/tasks/${id}/recommendation?priority=${priority}`
     ),
+};
+
+// Artifacts
+export const artifactsApi = {
+  get: (id: string) => request<{ data: AgentArtifact }>(`/artifacts/${id}`),
 };
 
 // Datasets

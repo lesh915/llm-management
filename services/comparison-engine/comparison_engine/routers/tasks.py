@@ -30,6 +30,7 @@ async def create_task(body: ComparisonTaskCreate, db: Db):
     task = ComparisonTask(
         name=body.name,
         artifact_id=uuid.UUID(body.artifact_id) if body.artifact_id else None,
+        baseline_model_id=body.baseline_model_id,
         model_ids=body.models,
         dataset_id=body.dataset_id,
         metrics=body.metrics,
@@ -166,6 +167,7 @@ def _ser(t: ComparisonTask) -> dict:
         "id": str(t.id),
         "name": t.name,
         "artifact_id": str(t.artifact_id) if t.artifact_id else None,
+        "baseline_model_id": t.baseline_model_id,
         "model_ids": t.model_ids,
         "dataset_id": t.dataset_id,
         "metrics": t.metrics,
