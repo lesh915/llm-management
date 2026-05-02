@@ -110,7 +110,7 @@ cp .env.example .env
 # .env
 DATABASE_URL=postgresql+asyncpg://llm_mgmt:password@localhost:5432/llm_mgmt
 REDIS_URL=redis://localhost:6379/0
-S3_ENDPOINT=http://localhost:9000
+S3_ENDPOINT=http://localhost:47002
 S3_BUCKET=llm-management
 
 # LLM API Keys (필요한 공급자만)
@@ -1180,7 +1180,7 @@ class OllamaAdapter(BaseLLMAdapter):
 #### Ollama 등록 예시 (REST API)
 
 ```bash
-curl -X POST http://localhost:8002/models \
+curl -X POST http://localhost:47011/models \
   -H "Content-Type: application/json" \
   -d '{
     "id": "ollama/llama3.2:3b",
@@ -1219,7 +1219,7 @@ curl -X POST http://localhost:8002/models \
 #### vLLM 등록 예시
 
 ```bash
-curl -X POST http://localhost:8002/models \
+curl -X POST http://localhost:47011/models \
   -H "Content-Type: application/json" \
   -d '{
     "id": "vllm/mistral-7b-instruct",
@@ -1372,7 +1372,7 @@ def _infer_model_meta(model_name: str) -> dict:
 #### 비교 태스크 예시 (클라우드 + 로컬 혼합)
 
 ```bash
-curl -X POST http://localhost:8003/tasks \
+curl -X POST http://localhost:47012/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Cloud vs Local Benchmark",
@@ -1507,20 +1507,20 @@ services:
       POSTGRES_DB: llm_mgmt
       POSTGRES_USER: llm_mgmt
       POSTGRES_PASSWORD: password
-    ports: ["5432:5432"]
+    # 호스트 포트 바인딩 없음 — 내부 네트워크 전용
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    # 호스트 포트 바인딩 없음 — 내부 네트워크 전용
 
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["47002:9000", "47003:9001"]
 
   ollama:
     image: ollama/ollama:latest
-    ports: ["11434:11434"]
+    # 호스트 포트 바인딩 없음 — 내부 네트워크 전용
     volumes:
       - ollama_data:/root/.ollama
     # GPU 사용 시 (NVIDIA)
