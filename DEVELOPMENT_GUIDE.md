@@ -698,7 +698,7 @@ CREATE TABLE model_registry (
 CREATE TABLE model_variants (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     artifact_id UUID REFERENCES agent_artifacts(id) ON DELETE CASCADE,
-    model_id    VARCHAR(100) REFERENCES model_registry(id),
+    model_id    VARCHAR(100) REFERENCES model_registry(id) ON DELETE CASCADE,
     content     JSONB NOT NULL,
     notes       TEXT,
     created_at  TIMESTAMPTZ DEFAULT NOW(),
@@ -721,7 +721,7 @@ CREATE TABLE comparison_tasks (
 CREATE TABLE comparison_results (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id     UUID REFERENCES comparison_tasks(id) ON DELETE CASCADE,
-    model_id    VARCHAR(100) REFERENCES model_registry(id),
+    model_id    VARCHAR(100) REFERENCES model_registry(id) ON DELETE CASCADE,
     metrics     JSONB NOT NULL,
     raw_outputs JSONB,
     cost_usd    DECIMAL(10, 6),
@@ -731,7 +731,7 @@ CREATE TABLE comparison_results (
 CREATE TABLE aiops_events (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id    UUID REFERENCES agents(id),
-    model_id    VARCHAR(100) REFERENCES model_registry(id),
+    model_id    VARCHAR(100) REFERENCES model_registry(id) ON DELETE SET NULL,
     event_type  VARCHAR(100) NOT NULL,
     severity    VARCHAR(20) CHECK (severity IN ('low', 'medium', 'high', 'critical')),
     description TEXT,
